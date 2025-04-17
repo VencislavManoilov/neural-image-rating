@@ -112,7 +112,8 @@ def train():
 
         print(f"Epoch {epoch+1}/{EPOCHS} | Loss: {running_loss/len(train_loader):.4f}")
 
-    torch.save(model.state_dict(), "model.pth")
+    # torch.save(model.state_dict(), "model.pth")
+    torch.save(model, "model_full.pth")
 
 # Eval
 def evaluate():
