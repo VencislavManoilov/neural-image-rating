@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 
+const URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 function App() {
   const [images, setImages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
