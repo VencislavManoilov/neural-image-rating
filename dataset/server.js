@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
 const { createObjectCsvWriter } = require('csv-writer');
-const { version } = require('os');
 const cors = require('cors'); // Add CORS package
 
 const app = express();
