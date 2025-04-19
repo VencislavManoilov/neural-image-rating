@@ -1,3 +1,7 @@
 .env
 venv
-model_full.pth
+model_final.pth
+best_model.pth
+learning_curve.png
+predictions.png
+image_cache
