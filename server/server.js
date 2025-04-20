@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const knex = require('./knex');
+const ensureSchema = require('./schema');
 
 const dotenv = require('dotenv');
 dotenv.config();
@@ -105,6 +107,14 @@ app.get("/download-thumbnails", async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+(async () => {
+    try {
+        ensureSchema().then(async () => {
+            app.listen(PORT, () => {
+                console.log(`Server is running on port ${PORT}`);
+            });
+        })
+    } catch (error) {
+        console.error("Error ensuring database schema:", error);
+    }
+})()
