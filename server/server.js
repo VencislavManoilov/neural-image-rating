@@ -7,6 +7,7 @@ const cheerio = require('cheerio');
 const knex = require('./knex');
 const ensureSchema = require('./schema');
 const logger = require('./utils/logger');
+const cors = require('cors');
 
 const dotenv = require('dotenv');
 dotenv.config();
@@ -17,6 +18,13 @@ app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 8080;
 
 const SITE_URL = process.env.SITE_URL;
+
+// Enable CORS for localhost:3000 or if there is CORS_ORIGIN variable array in .env
+const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'];
+app.use(cors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+}));
 
 // Create thumbnails directory if it doesn't exist
 const thumbnailsDir = path.join(__dirname, 'thumbnails');
