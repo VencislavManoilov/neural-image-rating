@@ -12,7 +12,7 @@ const schemaDefinition = {
   },
   labels: {
     id: { type: 'increments', primary: true },
-    user_id: { type: 'integer', notNullable: true },
+    userId: { type: 'integer', notNullable: true },
     label: { type: 'string', notNullable: true },
     created_at: { type: 'timestamp', defaultTo: knex.fn.now() },
   }
