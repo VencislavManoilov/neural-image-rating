@@ -7,7 +7,7 @@ const Authorization = require('../middleware/Authorization');
 const logger = require('../utils/logger');
 
 // JWT secret key - in production this should be in environment variables
-const JWT_SECRET = 'your-jwt-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-key';
 
 // Register endpoint
 router.post('/register', async (req, res) => {
@@ -41,7 +41,7 @@ router.post('/register', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign({ email: newUser.email }, JWT_SECRET, { expiresIn: '7d' });
     
-    res.status(201).json({ 
+    res.status(200).json({ 
       message: 'User registered successfully',
       user: {
         id: newUser.id,
