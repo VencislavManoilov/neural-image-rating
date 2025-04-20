@@ -10,6 +10,9 @@ const ensureSchema = require('./schema');
 const dotenv = require('dotenv');
 dotenv.config();
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 const PORT = process.env.PORT || 8080;
 
 const SITE_URL = process.env.SITE_URL;
@@ -88,6 +91,12 @@ app.get("/", (req, res) => {
         version: "1.0.0",
     });
 });
+
+const authRoute = require("./routes/auth");
+app.use("/auth", (req, res, next) => {
+    req.knex = knex;
+    next();
+}, authRoute);
 
 // Add a route to trigger thumbnail downloading
 app.get("/download-thumbnails", async (req, res) => {
