@@ -6,6 +6,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const knex = require('./knex');
 const ensureSchema = require('./schema');
+const logger = require('./utils/logger');
 
 const dotenv = require('dotenv');
 dotenv.config();
@@ -45,7 +46,7 @@ async function getThumbnails(page) {
             }
         });
         
-        console.log(`Found ${thumbnailUrls.length} thumbnail URLs`);
+        logger.info(`Found ${thumbnailUrls.length} thumbnail URLs`);
         
         // Download each thumbnail
         const downloadPromises = thumbnailUrls.map(async (url, index) => {
@@ -69,7 +70,7 @@ async function getThumbnails(page) {
                     writer.on('error', reject);
                 });
             } catch (error) {
-                console.error(`Error downloading thumbnail ${url}:`, error.message);
+                logger.error(`Error downloading thumbnail ${url}:` + error.message);
                 return null;
             }
         });
@@ -77,10 +78,10 @@ async function getThumbnails(page) {
         const downloadedFiles = await Promise.all(downloadPromises);
         const successfulDownloads = downloadedFiles.filter(file => file !== null);
         
-        console.log(`Successfully downloaded ${successfulDownloads.length} thumbnails`);
+        logger.info(`Successfully downloaded ${successfulDownloads.length} thumbnails`);
         return successfulDownloads;
     } catch (error) {
-        console.error("Error fetching thumbnails:", error);
+        logger.error("Error fetching thumbnails:" + error);
         return [];
     }
 }
@@ -120,10 +121,10 @@ app.get("/download-thumbnails", async (req, res) => {
     try {
         ensureSchema().then(async () => {
             app.listen(PORT, () => {
-                console.log(`Server is running on port ${PORT}`);
+                logger.info(`Server is running on port ${PORT}`);
             });
         })
     } catch (error) {
-        console.error("Error ensuring database schema:", error);
+        logger.error("Error ensuring database schema:" + error);
     }
 })()
