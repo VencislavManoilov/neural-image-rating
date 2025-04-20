@@ -8,15 +8,16 @@ const cors = require('cors'); // Add CORS package
 const app = express();
 const PORT = process.env.PORT || 5000;
 const IMAGES_DIR = path.join(__dirname, 'images');
-const LABELS_FILE = path.join(__dirname, 'labels.csv');
+const LABELS_DIR = path.join(__dirname, 'labels');
 
-// Enable CORS for the React client
-app.use(cors());
+const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:8080'];
+app.use(cors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+}));
 
-// Ensure CSV file exists with headers
-if (!fs.existsSync(LABELS_FILE)) {
-  fs.writeFileSync(LABELS_FILE, 'image,rating\n');
-}
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
     res.status(200).json({
@@ -59,16 +60,23 @@ app.get('/get/:name', (req, res) => {
 });
 
 // GET /labels - Get labels.csv
-app.get('/labels', (req, res) => {
+app.get('/labels/:name', (req, res) => {
+  const labelsName = req.params.name;
+  const labelsPath = path.join(LABELS_DIR, labelsName);
+
   // Check if labels file exists
-  fs.access(LABELS_FILE, fs.constants.F_OK, (err) => {
+  if(!fs.existsSync(labelsPath)) {
+    return res.status(404).json({ error: 'Labels file not found' });
+  }
+
+  fs.access(labelsPath, fs.constants.F_OK, (err) => {
     if (err) {
       return res.status(404).json({ error: 'Labels file not found' });
     }
     
     // Read the CSV file
     const results = [];
-    fs.createReadStream(LABELS_FILE)
+    fs.createReadStream(labelsPath)
       .pipe(csv())
       .on('data', (data) => results.push(data))
       .on('end', () => {
@@ -79,6 +87,30 @@ app.get('/labels', (req, res) => {
         res.status(500).json({ error: 'Failed to read labels file' });
       });
   });
+});
+
+// POST /add - Create a new labels file in labels directory with the name provided in the request body
+app.post('/add', (req, res) => {
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+  
+  const labelsPath = path.join(LABELS_DIR, name);
+  
+  // Check if file already exists
+  if (fs.existsSync(labelsPath)) {
+    return res.status(400).json({ error: 'Labels file already exists' });
+  }
+  
+  // Create a new labels file
+  try {
+    fs.writeFileSync(labelsPath, 'image,rating\n'); // Initialize with headers
+    res.status(200).json({ message: 'Labels file created', name });
+  } catch (err) {
+    console.error('Error creating labels file:', err);
+    return res.status(500).json({ error: 'Failed to create labels file' });
+  }
 });
 
 // POST /rate/:name?rating=... - Save or update image rating
