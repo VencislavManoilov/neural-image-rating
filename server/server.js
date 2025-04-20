@@ -8,6 +8,7 @@ const knex = require('./knex');
 const ensureSchema = require('./schema');
 const logger = require('./utils/logger');
 const cors = require('cors');
+const Authorization = require('./middleware/Authorization');
 
 const dotenv = require('dotenv');
 dotenv.config();
@@ -19,7 +20,6 @@ const PORT = process.env.PORT || 8080;
 
 const SITE_URL = process.env.SITE_URL;
 
-// Enable CORS for localhost:3000 or if there is CORS_ORIGIN variable array in .env
 const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'];
 app.use(cors({
     origin: allowedOrigins,
@@ -102,10 +102,10 @@ app.get("/", (req, res) => {
 });
 
 const authRoute = require("./routes/auth");
-app.use("/auth", (req, res, next) => {
-    req.knex = knex;
-    next();
-}, authRoute);
+app.use("/auth", authRoute);
+
+const labelsRoute = require("./routes/labels");
+app.use("/labels", Authorization, labelsRoute);
 
 // Add a route to trigger thumbnail downloading
 app.get("/download-thumbnails", async (req, res) => {
