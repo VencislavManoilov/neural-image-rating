@@ -1,24 +1,27 @@
-import { useState, useEffect } from 'react';
-import './App.css';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import Home from './components/Home';
+import Login from './components/Login';
+import Register from './components/Register';
 import Rate from './components/Rate';
-
-// const URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+import './App.css';
 
 function App() {
-  const [createNewLabel, setCreateNewLabel] = useState(false);
-
   return (
-    <div className="App">
-
-      {createNewLabel ? 
-        <Rate />
-      : (
-        <div className="home">
-          <h1>Welcome to the Image Rating Dataset</h1>
-          <button onClick={() => setCreateNewLabel(true)}>Start Rating</button>
+    <AuthProvider>
+      <Router>
+        <div className="app">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/rate" element={<Rate />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </div>
-      )}
-    </div>
+      </Router>
+    </AuthProvider>
   );
 }
 

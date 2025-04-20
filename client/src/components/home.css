@@ -1,0 +1,152 @@
+.home-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background-color: #000;
+  color: #fff;
+}
+
+.welcome-section {
+  text-align: center;
+  max-width: 800px;
+  padding: 40px;
+  background-color: rgba(18, 18, 18, 0.7);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.welcome-section h1 {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #5d26c1, #a17fe0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.welcome-section p {
+  font-size: 1.2rem;
+  color: #b3b3b3;
+  margin-bottom: 30px;
+}
+
+.username {
+  color: #a17fe0;
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.action-button {
+  padding: 14px 30px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.action-button.primary {
+  background: linear-gradient(135deg, #5d26c1, #a17fe0);
+  color: white;
+  border: none;
+}
+
+.action-button.secondary {
+  background: transparent;
+  color: #a17fe0;
+  border: 2px solid #a17fe0;
+}
+
+.action-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(93, 38, 193, 0.2);
+}
+
+.auth-options {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.auth-option {
+  padding: 14px 40px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.auth-option:first-child {
+  background: linear-gradient(135deg, #5d26c1, #a17fe0);
+  color: white;
+}
+
+.auth-option:last-child {
+  background: transparent;
+  color: #a17fe0;
+  border: 2px solid #a17fe0;
+}
+
+.auth-option:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(93, 38, 193, 0.2);
+}
+
+/* Loading spinner */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: #a17fe0;
+  animation: spin 1s ease-in-out infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+  .welcome-section h1 {
+    font-size: 2rem;
+  }
+  
+  .welcome-section p {
+    font-size: 1rem;
+  }
+  
+  .auth-options {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .auth-option {
+    width: 100%;
+    text-align: center;
+  }
+}

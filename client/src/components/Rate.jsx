@@ -2,7 +2,7 @@ import React from 'react'
 import { useState, useEffect } from 'react';
 import './rate.css';
 
-const URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const DATASET_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 function Rate() {
   const [images, setImages] = useState([]);
@@ -15,7 +15,7 @@ function Rate() {
     const fetchImages = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(URL+'/images');
+        const response = await fetch(DATASET_URL+'/images');
         
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
@@ -41,7 +41,7 @@ function Rate() {
     const currentImage = images[currentIndex];
     
     try {
-      const response = await fetch(`http://localhost:5000/rate/${currentImage}?rating=${rating}`, {
+      const response = await fetch(`${DATASET_URL}/rate/${currentImage}?rating=${rating}`, {
         method: 'POST',
       });
       
@@ -112,7 +112,7 @@ function Rate() {
               </button>
               <div className="image-container">
                 <img 
-                  src={`http://localhost:5000/get/${images[currentIndex]}`}
+                  src={`${DATASET_URL}/get/${images[currentIndex]}`}
                   alt=""
                 />
               </div>
