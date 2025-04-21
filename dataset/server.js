@@ -113,6 +113,27 @@ app.post('/add', (req, res) => {
   }
 });
 
+// DELETE /delete/:name - Delete a labels file
+app.delete('/labels/:name', (req, res) => {
+  const labelsName = req.params.name;
+  const labelsPath = path.join(LABELS_DIR, labelsName);
+  
+  // Check if file exists
+  if (!fs.existsSync(labelsPath)) {
+    return res.status(404).json({ error: 'Labels file not found' });
+  }
+  
+  // Delete the file
+  fs.unlink(labelsPath, (err) => {
+    if (err) {
+      console.error('Error deleting labels file:', err);
+      return res.status(500).json({ error: 'Failed to delete labels file' });
+    }
+    
+    res.json({ message: 'Labels file deleted' });
+  });
+});
+
 // POST /rate/:name?rating=... - Save or update image rating
 app.post('/rate/:name', (req, res) => {
   const imageName = req.params.name;
