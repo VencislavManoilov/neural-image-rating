@@ -1,0 +1,174 @@
+.label-detail-container {
+  padding: 40px 20px;
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100vh;
+  color: #fff;
+}
+
+.label-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.label-detail-header h1 {
+  font-size: 2.5rem;
+  background: linear-gradient(135deg, #5d26c1, #a17fe0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.back-to-labels {
+  background: transparent;
+  color: #a17fe0;
+  border: 2px solid #a17fe0;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.back-to-labels:hover {
+  background-color: rgba(161, 127, 224, 0.1);
+  transform: translateY(-2px);
+}
+
+.label-detail-card {
+  background-color: #121212;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  margin-bottom: 30px;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.label-detail-info {
+  margin-bottom: 30px;
+}
+
+.detail-item {
+  display: flex;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #333;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.detail-label {
+  width: 150px;
+  color: #b3b3b3;
+  font-weight: 500;
+}
+
+.detail-value {
+  flex-grow: 1;
+  color: #ffffff;
+}
+
+.label-detail-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.edit-label-button, .delete-label-button {
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.edit-label-button {
+  background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+  color: white;
+  border: none;
+}
+
+.delete-label-button {
+  background: transparent;
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+}
+
+.edit-label-button:hover, .delete-label-button:hover {
+  transform: translateY(-3px);
+}
+
+.edit-label-button:hover {
+  box-shadow: 0 6px 20px rgba(58, 123, 213, 0.2);
+}
+
+.delete-label-button:hover {
+  background-color: rgba(255, 107, 107, 0.1);
+}
+
+.label-detail-error, .label-detail-not-found {
+  background-color: #121212;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  margin-top: 50px;
+}
+
+.label-detail-error h2, .label-detail-not-found h2 {
+  color: #ff6b6b;
+  margin-bottom: 20px;
+}
+
+.label-detail-error p {
+  color: #b3b3b3;
+  margin-bottom: 30px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .label-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  
+  .detail-item {
+    flex-direction: column;
+  }
+  
+  .detail-label {
+    width: 100%;
+    margin-bottom: 5px;
+  }
+  
+  .label-detail-actions {
+    flex-direction: column;
+  }
+  
+  .edit-label-button, .delete-label-button {
+    width: 100%;
+  }
+}

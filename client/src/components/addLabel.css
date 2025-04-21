@@ -1,0 +1,136 @@
+.add-label-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  background-color: #000;
+  color: #fff;
+}
+
+.add-label-card {
+  background-color: #121212;
+  border-radius: 12px;
+  padding: 40px;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.add-label-card h2 {
+  margin-bottom: 30px;
+  text-align: center;
+  font-size: 1.8rem;
+  background: linear-gradient(135deg, #5d26c1, #a17fe0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.form-group {
+  margin-bottom: 25px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 1rem;
+  color: #b3b3b3;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  background-color: #1e1e1e;
+  border: 2px solid #333;
+  border-radius: 8px;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #a17fe0;
+  box-shadow: 0 0 0 2px rgba(161, 127, 224, 0.2);
+}
+
+.add-label-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.add-label-submit, .add-label-cancel {
+  padding: 14px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+  text-align: center;
+}
+
+.add-label-submit {
+  background: linear-gradient(135deg, #5d26c1, #a17fe0);
+  color: white;
+  border: none;
+}
+
+.add-label-cancel {
+  background: transparent;
+  color: #b3b3b3;
+  border: 1px solid #444;
+  text-decoration: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.add-label-submit:hover, .add-label-cancel:hover {
+  transform: translateY(-2px);
+}
+
+.add-label-submit:hover {
+  box-shadow: 0 6px 20px rgba(93, 38, 193, 0.2);
+}
+
+.add-label-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.error-message {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: #ff6b6b;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  border-left: 4px solid #dc3545;
+}
+
+/* Animation for loading state */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+.add-label-submit:disabled {
+  animation: pulse 1.5s infinite;
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+  .add-label-card {
+    padding: 30px 20px;
+  }
+  
+  .add-label-actions {
+    flex-direction: column;
+  }
+}

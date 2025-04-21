@@ -13,13 +13,13 @@ function Home() {
   useEffect(() => {
     const checkLabels = async () => {
       try {
-        const response = await axios.get(URL+'/labels/me', {
+        const response = await axios.get(URL+'/labels/all', {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`
           }
         });
         
-        if(response.data.labels) {
+        if(response.data.labels && response.data.labels.length > 0) {
           setLabels(true);
         }
       } catch (error) {

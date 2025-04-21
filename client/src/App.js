@@ -5,6 +5,9 @@ import Home from './components/Home';
 import Login from './components/Login';
 import Register from './components/Register';
 import Rate from './components/Rate';
+import Labels from './components/Labels';
+import AddLabel from './components/AddLabel';
+import LabelDetail from './components/LabelDetail';
 import './App.css';
 
 function App() {
@@ -17,6 +20,9 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/rate" element={<Rate />} />
+            <Route path="/labels" element={<Labels />} />
+            <Route path="/add-label" element={<AddLabel />} />
+            <Route path="/labels/:id" element={<LabelDetail />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
