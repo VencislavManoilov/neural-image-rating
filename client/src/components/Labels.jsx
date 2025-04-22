@@ -9,8 +9,7 @@ function Labels() {
   const [labels, setLabels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [editingLabel, setEditingLabel] = useState(null);
-  const [editValue, setEditValue] = useState('');
+  const [trainConfirm, setTrainConfirm] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const navigate = useNavigate();
@@ -38,44 +37,17 @@ function Labels() {
 
     fetchLabels();
   }, []);
-
-
-  const handleEditStart = (label) => {
-    setEditingLabel(label.label);
-    setEditValue(label.label);
+  
+  const handleTrainConfirm = (name) => {
+    setTrainConfirm(name);
   };
 
-  const handleEditCancel = () => {
-    setEditingLabel(null);
-    setEditValue('');
+  const handleTrainCencel = (name) => {
+    setTrainConfirm(false);
   };
 
-  const handleEditSave = async (name) => {
-    if (!editValue.trim()) {
-      return;
-    }
-    
-    try {
-      const response = await axios.put(`${URL}/labels/update/${name}`, 
-        { label: editValue },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
-      
-      if (response.data.success) {
-        // Update local state with edited label
-        setLabels(labels.map(label => 
-          label.label === name ? { ...label, label: editValue } : label
-        ));
-        setEditingLabel(null);
-      }
-    } catch (error) {
-      console.error('Error updating label:', error);
-      setError('Failed to update label. Please try again.');
-    }
+  const handleTrain = async (label) => {
+
   };
 
   const handleDeleteConfirm = (name) => {
@@ -143,25 +115,19 @@ function Labels() {
         <div className="labels-list">
           {labels.map(label => (
             <div key={label.label} className="label-card">
-              {editingLabel === label.label ? (
-                <div className="label-edit">
-                  <input
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    autoFocus
-                    className="label-edit-input"
-                  />
-                  <div className="label-edit-actions">
+              {trainConfirm === label.label ? (
+                <div className="label-train-confirm">
+                  <p>Are you sure you want to train this label?</p>
+                  <div className="train-confirm-actions">
                     <button 
-                      className="edit-save-button" 
-                      onClick={() => handleEditSave(label.label)}
+                      className="train-confirm-button" 
+                      onClick={() => handleTrain(label)}
                     >
-                      Save
+                      Yes, Train
                     </button>
                     <button 
-                      className="edit-cancel-button" 
-                      onClick={handleEditCancel}
+                      className="train-cancel-button" 
+                      onClick={handleTrainCencel}
                     >
                       Cancel
                     </button>
@@ -196,10 +162,10 @@ function Labels() {
                       View
                     </Link>
                     <button 
-                      className="edit-button" 
-                      onClick={() => handleEditStart(label)}
+                      className="train-button" 
+                      onClick={() => handleTrainConfirm(label.label)}
                     >
-                      Edit
+                      Train
                     </button>
                     <button 
                       className="delete-button" 
