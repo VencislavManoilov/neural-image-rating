@@ -65,7 +65,7 @@ function Home() {
           
           <div className="action-buttons">
             {labels ? (
-              <Link to="/labels" className="action-button">
+              <Link to="/labels" className="action-button primary">
                 View Your Labels
               </Link>
             ) : (
