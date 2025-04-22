@@ -111,12 +111,12 @@ function LabelDetail() {
         </div>
         
         <div className="label-detail-actions">
-          <Link to={`/labels/edit/${labels.id}`} className="edit-label-button">
+          <Link to={`/labels/edit/${id}`} className="edit-label-button">
             Edit Label
           </Link>
-          <Link to={`/labels/delete/${labels.id}`} className="delete-label-button">
+          <button className="delete-label-button">
             Delete Label
-          </Link>
+          </button>
         </div>
         
         {labels.length > 0 ? (

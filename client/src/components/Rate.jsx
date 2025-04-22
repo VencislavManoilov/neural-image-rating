@@ -1,10 +1,12 @@
 import React from 'react'
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import './rate.css';
 
-const DATASET_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const DATASET_URL = process.env.REACT_APP_DATASET_URL || 'http://localhost:5000';
+const URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
-function Rate() {
+function Rate({ label }) {
   const [images, setImages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,12 +43,18 @@ function Rate() {
     const currentImage = images[currentIndex];
     
     try {
-      const response = await fetch(`${DATASET_URL}/rate/${currentImage}?rating=${rating}`, {
-        method: 'POST',
+      await axios.post(`${URL}/labels/rate/${label?.name}/${currentImage}?rating=${rating}`, {}, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        }
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+
+      const image = label.labels.find(l => l.image == currentImage);
+
+      if(image && image.rating) {
+        image.rating = rating;
+      } else {
+        label.labels.push({ image: currentImage, rating });
       }
       
       // Move to the next image
@@ -78,15 +86,18 @@ function Rate() {
   };
 
   // Create array of rating buttons from 1-10
-  const ratingButtons = [...Array(10)].map((_, i) => (
-    <button
-      key={i + 1}
-      className="rating-button"
-      onClick={() => handleRating(i + 1)}
-    >
-      {i + 1}
-    </button>
-  ));
+  const ratingButtons = (rating) => {
+    console.log(rating);
+    return [...Array(10)].map((_, i) => (
+      <button
+        key={i + 1}
+        className={"rating-button" + (rating == i + 1 ? ' selected' : '')}
+        onClick={() => handleRating(i + 1)}
+      >
+        {i + 1}
+      </button>
+    ));
+  };
 
   if (isLoading) {
     return <div className="loading">Loading images...</div>;
@@ -127,7 +138,7 @@ function Rate() {
             <div className="rating-container">
               <p>Rate this image:</p>
               <div className="rating-buttons">
-                {ratingButtons}
+                {ratingButtons(label?.labels.find(l => l.image === images[currentIndex])?.rating)}
               </div>
             </div>
           </>

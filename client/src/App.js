@@ -9,6 +9,7 @@ import Labels from './components/Labels';
 import AddLabel from './components/AddLabel';
 import LabelDetail from './components/LabelDetail';
 import './App.css';
+import Edit from './components/Edit';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/labels" element={<Labels />} />
             <Route path="/add-label" element={<AddLabel />} />
             <Route path="/labels/:id" element={<LabelDetail />} />
+            <Route path="/labels/edit/:id" element={<Edit />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
