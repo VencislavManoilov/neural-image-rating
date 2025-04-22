@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import './labelDetail.css';
 
+const DATASET_URL = process.env.REACT_APP_DATASET_URL || 'http://localhost:5000';
 const URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 function LabelDetail() {
@@ -25,7 +26,7 @@ function LabelDetail() {
         
         if (response.data.labels) {
           setLabels(response.data.labels);
-            setLabelsDetails(response.data.labelsDetails);
+          setLabelsDetails(response.data.labelsDetails);
         } else {
           setError('Label not found');
         }
@@ -122,14 +123,14 @@ function LabelDetail() {
         {labels.length > 0 ? (
           <div className="label-detail-images">
             <h2>Images Associated with this Label</h2>
-            <ul className="image-list">
-              {labels.images.map((image) => (
-                <li key={image.id} className="image-item">
-                  {/* <img src={image.url} alt={image.description} className="image-thumbnail" />
-                  <p>{image.description}</p> */}
-                </li>
+            <div className="image-list">
+              {labels.map((image) => (
+                <div key={image.image} className="image-item">
+                  <img src={DATASET_URL+"/get/"+image.image} className="image-thumbnail" />
+                  <p>{image.rating}</p>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         ) : (
             <div className="no-images">
