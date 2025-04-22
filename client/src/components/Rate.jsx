@@ -49,7 +49,7 @@ function Rate({ label }) {
         }
       });
 
-      const image = label.labels.find(l => l.image == currentImage);
+      const image = label.labels.find(l => l.image === currentImage);
 
       if(image && image.rating) {
         image.rating = rating;
@@ -91,7 +91,7 @@ function Rate({ label }) {
     return [...Array(10)].map((_, i) => (
       <button
         key={i + 1}
-        className={"rating-button" + (rating == i + 1 ? ' selected' : '')}
+        className={"rating-button" + (rating === i + 1 ? ' selected' : '')}
         onClick={() => handleRating(i + 1)}
       >
         {i + 1}

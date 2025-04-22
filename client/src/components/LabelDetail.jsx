@@ -126,7 +126,7 @@ function LabelDetail() {
             <div className="image-list">
               {labels.map((image) => (
                 <div key={image.image} className="image-item">
-                  <img src={DATASET_URL+"/get/"+image.image} className="image-thumbnail" />
+                  <img src={DATASET_URL+"/get/"+image.image} alt="" className="image-thumbnail" />
                   <p>{image.rating}</p>
                 </div>
               ))}
