@@ -118,6 +118,49 @@ router.post('/add', async (req, res) => {
     }
 });
 
+router.post('/rate/:id/:name', async (req, res) => {
+    const imageName = req.params.name;
+    const labelsName = req.params.id;
+    const rating = req.query.rating;
+
+    // Validate input
+    if (!rating || !imageName || !labelsName) {
+        return res.status(400).json({ message: 'Image name, label id and rating are required' });
+    }
+
+    try {
+        // Check if the labels exist in the dataset
+        const labelsCheck = await knex('labels')
+            .where({ label: labelsName })
+            .first();
+
+        if (!labelsCheck) {
+            return res.status(404).json({ message: 'Labels not found in the database' });
+        }
+
+        // Check if the labels belong to the user
+        if (labelsCheck.userId !== req.user.id) {
+            return res.status(403).json({ message: 'Unauthorized access to labels' });
+        }
+
+        // Send a request to the dataset to rate the image
+        const response = await axios.post(`${DATASET_URL}/rate/${labelsName}/${imageName}`, null, {
+            params: { rating }
+        });
+
+        if (response.status !== 200) {
+            return res.status(400).json({ message: 'Failed to rate image' });
+        }
+
+        res.json({
+            message: 'Image rated successfully'
+        });
+    } catch (error) {
+        logger.error('Error rating image:' + error);
+        res.status(500).json({ message: 'Server error while rating image' });
+    }
+});
+
 router.delete('/delete/:name', async (req, res) => {
     try {
         const labelName = req.params.name;
