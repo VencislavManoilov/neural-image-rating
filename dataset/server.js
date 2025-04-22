@@ -135,13 +135,20 @@ app.delete('/labels/:name', (req, res) => {
 });
 
 // POST /rate/:name?rating=... - Save or update image rating
-app.post('/rate/:name', (req, res) => {
+app.post('/rate/:id/:name', (req, res) => {
   const imageName = req.params.name;
+  const labelsName = req.params.id;
+  const LABELS_FILE = path.join(LABELS_DIR, labelsName);
   const rating = req.query.rating;
   
   // Validate input
-  if (!rating) {
-    return res.status(400).json({ error: 'Rating is required' });
+  if(!rating && !imageName && !labelsName) {
+    return res.status(400).json({ error: 'Image name, label id and rating are required' });
+  }
+
+  // Verify labels file exists
+  if (!fs.existsSync(LABELS_FILE)) {
+    return res.status(404).json({ error: 'Labels file not found' });
   }
   
   // Verify image exists
