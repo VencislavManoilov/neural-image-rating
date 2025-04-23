@@ -48,7 +48,7 @@ function Labels() {
 
   const handleTrain = async (label) => {
     try {
-      const response = await axios.post(`${URL}/labels/train/${label}`, {}, {
+      const response = await axios.post(`${URL}/labels/train/${label.label}`, {}, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
