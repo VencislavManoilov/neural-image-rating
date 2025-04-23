@@ -20,17 +20,17 @@ function trainModel(labelName, datasetUrl) {
     logger.info(`Starting training for label: ${labelName}`);
     logger.info(`Using dataset URL: ${datasetUrl}`);
     
-    // Use bash to set up environment and run the script
-    const bashScript = `
-      cd ${trainDir} && 
-      [ -d "venv" ] || python3 -m venv venv && 
-      source venv/bin/activate && 
-      pip install -r requirements.txt && 
-      python train.py --label ${labelName} --api-url ${datasetUrl}
-    `;
+    // Use python directly
+    const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
     
-    // Spawn bash to execute the script
-    const trainProcess = spawn('bash', ['-c', bashScript]);
+    // Spawn python to execute the script
+    const trainProcess = spawn(pythonExecutable, [
+      trainScriptPath,
+      '--label', labelName
+    ], {
+      cwd: trainDir,
+      env: { ...process.env }
+    });
     
     let stdout = '';
     let stderr = '';
