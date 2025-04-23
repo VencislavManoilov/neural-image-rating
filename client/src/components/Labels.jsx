@@ -42,12 +42,27 @@ function Labels() {
     setTrainConfirm(name);
   };
 
-  const handleTrainCencel = (name) => {
-    setTrainConfirm(false);
+  const handleTrainCancel = () => {
+    setTrainConfirm(null);
   };
 
   const handleTrain = async (label) => {
-
+    try {
+      const response = await axios.post(`${URL}/labels/train/${label}`, {}, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.status === 200) {
+        setTrainConfirm(null);
+        alert(`Training started successfully for label: ${label}`);
+      }
+    } catch (error) {
+      console.error('Error starting training:', error);
+      setError('Failed to start training. Please try again.');
+      setTrainConfirm(null);
+    }
   };
 
   const handleDeleteConfirm = (name) => {
@@ -127,7 +142,7 @@ function Labels() {
                     </button>
                     <button 
                       className="train-cancel-button" 
-                      onClick={handleTrainCencel}
+                      onClick={handleTrainCancel}
                     >
                       Cancel
                     </button>
