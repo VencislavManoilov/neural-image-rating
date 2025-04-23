@@ -9,6 +9,7 @@ const ensureSchema = require('./schema');
 const logger = require('./utils/logger');
 const cors = require('cors');
 const Authorization = require('./middleware/Authorization');
+const fetchVideos = require('./utils/fetchVideos');
 
 const dotenv = require('dotenv');
 dotenv.config();
@@ -120,6 +121,26 @@ app.get("/download-thumbnails", async (req, res) => {
     } catch (error) {
         res.status(500).json({
             message: "Error downloading thumbnails",
+            error: error.message
+        });
+    }
+});
+
+app.get("/fetch-videos", async (req, res) => {
+    try {
+        const html = await axios.get(SITE_URL);
+        const videos = new fetchVideos(html.data);
+
+        // Await the fetchVideos method to complete
+        const fetchedVideos = await videos.fetchVideos();
+
+        res.status(200).json({
+            message: `Successfully fetched ${fetchedVideos.length} videos with ${fetchedVideos.reduce((sum, video) => sum + video.images.length, 0)} images`,
+            videos: fetchedVideos
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Error fetching videos",
             error: error.message
         });
     }
