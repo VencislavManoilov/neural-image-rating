@@ -13,7 +13,7 @@ const logger = require('./logger');
 function trainModel(labelName, datasetUrl) {
   return new Promise((resolve, reject) => {
     // Path to the training script
-    const trainScriptPath = path.resolve(__dirname, '../../../train/train.py');
+    const trainScriptPath = path.resolve(__dirname, '../train/train.py');
     const trainDir = path.dirname(trainScriptPath);
     
     // Log the training start

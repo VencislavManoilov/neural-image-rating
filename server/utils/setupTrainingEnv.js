@@ -9,7 +9,7 @@ const logger = require('./logger');
  */
 function setupTrainingEnv() {
   try {
-    const trainDir = path.resolve(__dirname, '../../../train');
+    const trainDir = path.resolve(__dirname, '../train');
     const setupScriptPath = path.join(trainDir, 'setup_env.sh');
     
     // Make the setup script executable
