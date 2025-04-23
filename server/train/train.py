@@ -356,7 +356,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, min_ratin
                 'max_rating': max_rating,
                 'best_val_loss': best_val_loss,
             }, "best_model.pth")
-            print(f"✓ New best model saved (val loss: {avg_val_loss:.4f})")
+            print(f" New best model saved (val loss: {avg_val_loss:.4f})")
             # Reset early stopping counter
             early_stop_counter = 0
         else:
@@ -581,13 +581,12 @@ def main():
         weight_decay=1e-4
     )
     
-    # Learning rate scheduler
+    # Learning rate scheduler - add verbose parameter if desired
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode='min',
         factor=0.5,
-        patience=3,
-        verbose=True
+        patience=3
     )
     
     # Train the model

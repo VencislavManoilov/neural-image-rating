@@ -6,3 +6,4 @@ learning_curve.png
 predictions.png
 image_cache
 models/
+__pycache__

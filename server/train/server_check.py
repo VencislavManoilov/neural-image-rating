@@ -1,53 +1,42 @@
 import requests
-import sys
-import os
 import time
-from dotenv import load_dotenv # type: ignore
+import sys
 
-def check_server(url, max_retries=3, wait_time=2):
-    """Check if the server is running and responsive at the given URL."""
+def check_server(url, max_retries=3, timeout=5):
+    """
+    Check if the server is running by making a request to the API
+    
+    Args:
+        url (str): The base URL of the API
+        max_retries (int): Maximum number of retry attempts
+        timeout (int): Timeout in seconds for the request
+        
+    Returns:
+        bool: True if server is accessible, False otherwise
+    """
     print(f"Checking server at {url}...")
     
-    for i in range(max_retries):
+    for attempt in range(max_retries):
         try:
-            response = requests.get(f"{url}/labels", timeout=5)
+            response = requests.get(f"{url}", timeout=timeout)
             if response.status_code == 200:
-                data = response.json()
-                label_count = len(data.get('labels', []))
-                print(f"✅ Server is running at {url}")
-                print(f"Found {label_count} labels in the dataset")
+                print(f"[OK] Server is running and responding")
                 return True
             else:
-                print(f"❌ Server responded with status code: {response.status_code}")
-        except requests.exceptions.ConnectionError:
-            print(f"❌ Connection refused (attempt {i+1}/{max_retries})")
-        except requests.exceptions.Timeout:
-            print(f"❌ Connection timed out (attempt {i+1}/{max_retries})")
-        except Exception as e:
-            print(f"❌ Error: {str(e)}")
-        
-        if i < max_retries - 1:
-            print(f"Retrying in {wait_time} seconds...")
-            time.sleep(wait_time)
+                print(f"[ERROR] Server responded with status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Could not connect to server: {str(e)}")
+            
+        if attempt < max_retries - 1:
+            retry_time = (attempt + 1) * 2
+            print(f"Retrying in {retry_time} seconds... (attempt {attempt + 1}/{max_retries})")
+            time.sleep(retry_time)
     
-    print("\nServer check failed. Please make sure:")
-    print("1. The server is running")
-    print("2. The server URL is correct")
-    print("3. Your network allows connections to the server")
-    print("\nTo start training with a different URL:")
-    print("python train.py --api-url http://your-server-url:port")
-    
+    print(f"[FAILED] Server at {url} is not accessible after {max_retries} attempts")
     return False
 
 if __name__ == "__main__":
-    # Load environment variables
-    load_dotenv()
-    
-    # Get URL from command line or environment
     if len(sys.argv) > 1:
-        url = sys.argv[1]
+        check_server(sys.argv[1])
     else:
-        url = os.getenv("DATASET_URL", "http://localhost:5000")
-    
-    success = check_server(url)
-    sys.exit(0 if success else 1)
+        check_server("http://localhost:5000")
