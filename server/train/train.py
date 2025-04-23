@@ -10,34 +10,69 @@ import io
 import requests
 import numpy as np
 import random
+import argparse
 from sklearn.model_selection import train_test_split # type: ignore
 import matplotlib.pyplot as plt
 import time
 from dotenv import load_dotenv # type: ignore
+from server_check import check_server
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Key parameters - COMPLETELY SIMPLIFIED
+# Parse command line arguments
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Train model on labeled images')
+    parser.add_argument('--label', type=str, help='Label name to train on')
+    parser.add_argument('--api-url', type=str, default=os.getenv("API_URL", "http://localhost:5000"),
+                        help='API URL for the dataset server')
+    parser.add_argument('--batch-size', type=int, default=16, help='Batch size for training')
+    parser.add_argument('--epochs', type=int, default=20, help='Number of training epochs')
+    parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
+    parser.add_argument('--img-size', type=int, default=224, help='Image size for training')
+    parser.add_argument('--workers', type=int, default=2, help='Number of data loading workers')
+    parser.add_argument('--output-dir', type=str, default='./models', help='Directory to save model')
+    return parser.parse_args()
+
+# Key parameters - will be overridden by command line args
 API_URL = os.getenv("API_URL", "http://localhost:5000")
-BATCH_SIZE = 16      
-EPOCHS = 100        
-LR = 1e-4           
+BATCH_SIZE = 16
+EPOCHS = 20        
+LR = 3e-4           
 IMG_SIZE = 224      
 NUM_WORKERS = 2   
-MODEL_TYPE = "regression"  # Use "regression" instead of classification
+MODEL_TYPE = "regression"
+LABEL_NAME = None
+OUTPUT_DIR = "./models"
 
 # Move all global variables and initialization into a function
-def init_training():
-    # Parameters
+def init_training(args):
+    global API_URL, BATCH_SIZE, EPOCHS, LR, IMG_SIZE, NUM_WORKERS, LABEL_NAME, OUTPUT_DIR
+    
+    # Override globals with command line arguments
+    API_URL = args.api_url
+    BATCH_SIZE = args.batch_size
+    EPOCHS = args.epochs
+    LR = args.lr
+    IMG_SIZE = args.img_size
+    NUM_WORKERS = args.workers
+    LABEL_NAME = args.label
+    OUTPUT_DIR = args.output_dir
+    
+    # Ensure output directory exists
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Parameters dictionary for convenience
     config = {
-        'api_url': os.getenv("API_URL", "http://localhost:5000"),
-        'batch_size': 16,
-        'epochs': 20,
-        'lr': 3e-4,
-        'img_size': 224,
-        'num_workers': 2,
-        'pin_memory': True
+        'api_url': API_URL,
+        'batch_size': BATCH_SIZE,
+        'epochs': EPOCHS,
+        'lr': LR,
+        'img_size': IMG_SIZE,
+        'num_workers': NUM_WORKERS,
+        'pin_memory': True,
+        'label_name': LABEL_NAME,
+        'output_dir': OUTPUT_DIR
     }
     return config
 
@@ -101,10 +136,14 @@ class RatingDataset(Dataset):
                 image = self.transform(image)
             return image, torch.tensor([rating], dtype=torch.float32)
 
-# Load data from API
+# Load data from API for a specific label
 def fetch_labels():
-    print("Fetching data from API...")
-    response = requests.get(f"{API_URL}/labels")
+    print(f"Fetching data for label '{LABEL_NAME}' from API...")
+    if LABEL_NAME:
+        response = requests.get(f"{API_URL}/labels/{LABEL_NAME}")
+    else:
+        response = requests.get(f"{API_URL}/labels")
+        
     if response.status_code != 200:
         raise RuntimeError(f"Failed to fetch labels: {response.status_code}")
     
@@ -406,7 +445,7 @@ def evaluate_model(model, val_loader, min_rating, max_rating):
     plt.tight_layout()
     
     # Save figure with high quality
-    plt.savefig('predictions.png', dpi=300)
+    # plt.savefig('predictions.png', dpi=300)
     plt.show()
     
     return mse, mae
@@ -475,17 +514,32 @@ def evaluate_classification_model(model, val_loader, min_rating, max_rating):
     plt.tight_layout()
     
     # Save and show figure
-    plt.savefig('predictions.png', dpi=300)
+    # plt.savefig('predictions.png', dpi=300)
     plt.show()
     
     return accuracy, mse, mae
 
 # Main function to orchestrate the entire process
 def main():
+    # Parse command-line arguments
+    args = parse_arguments()
+    
+    # Initialize training parameters
+    config = init_training(args)
+    
+    # Verify server is running
+    if not check_server(API_URL):
+        print(f"Failed to connect to server at {API_URL}")
+        return
+    
     # Set up device
     global device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    
+    # Create model output directory with label name
+    model_dir = os.path.join(OUTPUT_DIR, LABEL_NAME) if LABEL_NAME else OUTPUT_DIR
+    os.makedirs(model_dir, exist_ok=True)
     
     # Load and prepare data
     train_df, val_df, min_rating, max_rating = fetch_labels()
@@ -543,22 +597,47 @@ def main():
         epochs=EPOCHS
     )
     
+    # Save model files to the label-specific directory
+    model_path = os.path.join(model_dir, "model_final.pth")
+    best_model_path = os.path.join(model_dir, "best_model.pth")
+    
+    # Save the final model
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'min_rating': min_rating,
+        'max_rating': max_rating,
+        'label': LABEL_NAME,
+    }, model_path)
+    
+    # Copy the best model if it exists in the current directory
+    if os.path.exists("best_model.pth"):
+        import shutil
+        shutil.copy("best_model.pth", best_model_path)
+    
     # Plot learning curves
     plt.figure(figsize=(10, 5))
-    plt.plot(range(1, EPOCHS+1), train_losses, label='Train Loss', marker='o')
-    plt.plot(range(1, EPOCHS+1), val_losses, label='Validation Loss', marker='x')
+    plt.plot(range(1, len(train_losses)+1), train_losses, label='Train Loss', marker='o')
+    plt.plot(range(1, len(val_losses)+1), val_losses, label='Validation Loss', marker='x')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.title('Training and Validation Loss')
+    plt.title(f'Training and Validation Loss for {LABEL_NAME}')
     plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.savefig('learning_curve.png')
-    plt.show()
+    plt.savefig(os.path.join(model_dir, 'learning_curve.png'))
+    plt.close()
     
     # Evaluate final model
-    evaluate_model(model, val_loader, min_rating, max_rating)
+    mse, mae = evaluate_model(model, val_loader, min_rating, max_rating)
     
-    print("Training and evaluation completed successfully!")
+    # Save evaluation metrics
+    with open(os.path.join(model_dir, 'metrics.txt'), 'w') as f:
+        f.write(f"Label: {LABEL_NAME}\n")
+        f.write(f"MSE: {mse:.4f}\n")
+        f.write(f"MAE: {mae:.4f}\n")
+        f.write(f"Min Rating: {min_rating}\n")
+        f.write(f"Max Rating: {max_rating}\n")
+    
+    print(f"Training and evaluation completed successfully for label {LABEL_NAME}!")
 
 if __name__ == "__main__":
     # Set random seeds for reproducibility
