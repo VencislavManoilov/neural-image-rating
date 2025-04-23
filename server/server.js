@@ -7,6 +7,7 @@ const cheerio = require('cheerio');
 const knex = require('./knex');
 const ensureSchema = require('./schema');
 const logger = require('./utils/logger');
+const setupTrainingEnv = require('./utils/setupTrainingEnv');
 const cors = require('cors');
 const Authorization = require('./middleware/Authorization');
 const fetchVideos = require('./utils/fetchVideos');
@@ -149,6 +150,9 @@ app.get("/fetch-videos", async (req, res) => {
 (async () => {
     try {
         ensureSchema().then(async () => {
+            // Set up training environment
+            setupTrainingEnv();
+            
             app.listen(PORT, () => {
                 logger.info(`Server is running on port ${PORT}`);
             });

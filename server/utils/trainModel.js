@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 const logger = require('./logger');
 
 /**
@@ -12,18 +13,24 @@ const logger = require('./logger');
 function trainModel(labelName, datasetUrl) {
   return new Promise((resolve, reject) => {
     // Path to the training script
-    const trainScriptPath = path.resolve(__dirname, '../train/train.py');
+    const trainScriptPath = path.resolve(__dirname, '../../../train/train.py');
+    const trainDir = path.dirname(trainScriptPath);
     
     // Log the training start
     logger.info(`Starting training for label: ${labelName}`);
     logger.info(`Using dataset URL: ${datasetUrl}`);
     
-    // Spawn the Python process
-    const trainProcess = spawn('python3', [
-      trainScriptPath,
-      '--label', labelName,
-      '--api-url', datasetUrl
-    ]);
+    // Use bash to set up environment and run the script
+    const bashScript = `
+      cd ${trainDir} && 
+      [ -d "venv" ] || python3 -m venv venv && 
+      source venv/bin/activate && 
+      pip install -r requirements.txt && 
+      python train.py --label ${labelName} --api-url ${datasetUrl}
+    `;
+    
+    // Spawn bash to execute the script
+    const trainProcess = spawn('bash', ['-c', bashScript]);
     
     let stdout = '';
     let stderr = '';
