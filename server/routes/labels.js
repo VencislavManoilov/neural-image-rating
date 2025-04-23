@@ -4,6 +4,7 @@ const knex = require('../knex');
 const logger = require('../utils/logger');
 const { default: axios } = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const trainModel = require('../utils/trainModel');
 
 const DATASET_URL = process.env.DATASET_URL || 'http://localhost:5000';
 
@@ -158,6 +159,44 @@ router.post('/rate/:id/:name', async (req, res) => {
     } catch (error) {
         logger.error('Error rating image:' + error);
         res.status(500).json({ message: 'Server error while rating image' });
+    }
+});
+
+router.post('/train/:name', async (req, res) => {
+    try {
+        const labelName = req.params.name;
+
+        // Check if the label exists
+        const label = await knex('labels')
+            .where({ label: labelName, userId: req.user.id })
+            .first();
+
+        if (!label) {
+            return res.status(404).json({ message: 'Label not found' });
+        }
+
+        // Check if the label belongs to the user
+        if (label.userId !== req.user.id) {
+            return res.status(403).json({ message: 'Unauthorized access to label' });
+        }
+        
+        // Start training in the background (don't await it)
+        trainModel(labelName, DATASET_URL)
+            .then(result => {
+                logger.info(`Training completed for label ${labelName}: ${JSON.stringify(result)}`);
+            })
+            .catch(error => {
+                logger.error(`Training failed for label ${labelName}: ${JSON.stringify(error)}`);
+            });
+        
+        // Respond immediately as training will run in the background
+        res.json({
+            message: 'Training started successfully',
+            label: labelName
+        });
+    } catch (error) {
+        logger.error('Error starting training:' + error);
+        res.status(500).json({ message: 'Server error while starting training' });
     }
 });
 
