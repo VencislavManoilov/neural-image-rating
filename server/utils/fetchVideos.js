@@ -1,6 +1,8 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const { spawn } = require('child_process');
 const { predictImage, predictBatch } = require('./predictImage');
 const logger = require('./logger');
@@ -12,6 +14,11 @@ class fetchVideos {
     this.html = html;
     this.videos = [];
     this.labelForRating = labelForRating;
+  }
+
+  // Helper method for creating cross-platform temp paths
+  getTempPath(filename) {
+    return path.join(os.tmpdir(), filename);
   }
 
   async fetchVideos() {
@@ -110,7 +117,7 @@ class fetchVideos {
   async downloadThumbnail(url, videoObj) {
     try {
       const imageId = Math.random().toString(36).substring(2, 15);
-      const imagePath = `/tmp/${imageId}.jpg`;
+      const imagePath = this.getTempPath(`${imageId}.jpg`);
       
       const response = await axios({
         method: 'GET',
@@ -134,7 +141,7 @@ class fetchVideos {
 
   async processVideo(mediabook, videoObj) {
     const videoId = Math.random().toString(36).substring(2, 15);
-    const videoPath = `/tmp/${videoId}.mp4`;
+    const videoPath = this.getTempPath(`${videoId}.mp4`);
     
     try {
       // Download video
@@ -172,33 +179,45 @@ class fetchVideos {
 
   async extractFrames(videoPath, videoId) {
     return new Promise((resolve, reject) => {
-      const outputDir = `/tmp/${videoId}`;
+      const outputDir = this.getTempPath(videoId);
       fs.mkdirSync(outputDir, { recursive: true });
       
-      const ffmpeg = spawn('ffmpeg', [
-        '-i', videoPath,
-        '-vf', 'fps=1/1', // Extract 1 frame every 1 seconds
-        '-vframes', '9',  // Limit to 9 frames
-        `${outputDir}/frame_%03d.jpg`
-      ]);
-      
-      ffmpeg.on('close', (code) => {
-        if (code !== 0) {
-          reject(new Error(`FFmpeg process exited with code ${code}`));
-          return;
-        }
+      try {
+        const ffmpeg = spawn('ffmpeg', [
+          '-i', videoPath,
+          '-vf', 'fps=1/1', // Extract 1 frame every 1 seconds
+          '-vframes', '9',  // Limit to 9 frames
+          path.join(outputDir, 'frame_%03d.jpg')
+        ]);
         
-        // Get the generated frame files
-        const frames = fs.readdirSync(outputDir)
-          .filter(file => file.startsWith('frame_'))
-          .map(file => `${outputDir}/${file}`);
+        ffmpeg.on('close', (code) => {
+          if (code !== 0) {
+            logger.error(`FFmpeg process exited with code ${code}`);
+            return resolve([]); // Return empty array instead of rejecting
+          }
+          
+          // Get the generated frame files
+          const frames = fs.readdirSync(outputDir)
+            .filter(file => file.startsWith('frame_'))
+            .map(file => path.join(outputDir, file));
+          
+          resolve(frames);
+        });
         
-        resolve(frames);
-      });
-      
-      ffmpeg.stderr.on('data', (data) => {
-        console.log(`FFmpeg: ${data}`);
-      });
+        ffmpeg.stderr.on('data', (data) => {
+          logger.info(`FFmpeg: ${data.toString()}`);
+        });
+        
+        // Handle the spawn error (which occurs when ffmpeg isn't found)
+        ffmpeg.on('error', (err) => {
+          logger.error(`Error spawning FFmpeg: ${err.message}`);
+          logger.info('Please install FFmpeg: https://ffmpeg.org/download.html');
+          resolve([]); // Return empty array to avoid breaking the chain
+        });
+      } catch (err) {
+        logger.error(`Error in extractFrames: ${err.message}`);
+        resolve([]); // Return empty array to avoid breaking the chain
+      }
     });
   }
 
