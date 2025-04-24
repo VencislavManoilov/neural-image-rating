@@ -9,6 +9,7 @@ import io
 import requests
 import numpy as np
 import sys
+import json
 from dotenv import load_dotenv
 from server_check import check_server
 
@@ -19,11 +20,13 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Make predictions using a trained model')
     parser.add_argument('--model', type=str, required=True, help='Path to the trained model file (.pth)')
     parser.add_argument('--image', type=str, help='Path to image file or image ID to predict')
+    parser.add_argument('--images', type=str, help='Comma-separated list of image paths to predict in batch')
     parser.add_argument('--label', type=str, help='Label name (used if predicting by image ID)')
     parser.add_argument('--api-url', type=str, default=os.getenv("API_URL", "http://localhost:5000"),
                         help='API URL for the dataset server')
     parser.add_argument('--img-size', type=int, default=224, help='Image size for model input')
     parser.add_argument('--batch', action='store_true', help='Enable batch prediction for all images of a label')
+    parser.add_argument('--json-output', action='store_true', help='Output results as JSON')
     return parser.parse_args()
 
 def create_model():
@@ -173,11 +176,56 @@ def predict_single_image(model, image_path, min_rating, max_rating, img_size, ap
     
     return prediction
 
+def predict_multiple_images(model, image_paths, min_rating, max_rating, img_size, api_url=None):
+    """Make predictions for multiple images at once"""
+    results = {}
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    model.eval()
+    
+    for image_path in image_paths:
+        # Load image either from file or API
+        if os.path.exists(image_path):
+            image_tensor = prepare_image(image_path, img_size)
+        elif api_url:
+            # Try to fetch from API
+            image = fetch_image_from_api(image_path, api_url)
+            if image:
+                transform = transforms.Compose([
+                    transforms.Resize((img_size, img_size)),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                ])
+                image_tensor = transform(image).unsqueeze(0)
+            else:
+                results[image_path] = None
+                continue
+        else:
+            print(f"Image not found: {image_path}")
+            results[image_path] = None
+            continue
+        
+        if image_tensor is None:
+            results[image_path] = None
+            continue
+        
+        # Move to device and make prediction
+        image_tensor = image_tensor.to(device)
+        with torch.no_grad():
+            output = model(image_tensor)
+        
+        # Convert normalized output back to rating scale
+        prediction = output.item() * (max_rating - min_rating) + min_rating
+        results[image_path] = prediction
+    
+    return results
+
 def main():
     args = parse_arguments()
     
     # Check if the server is running when we need it
-    if args.batch or not os.path.exists(args.image):
+    if args.batch or (args.image and not os.path.exists(args.image)) or \
+       (args.images and any(not os.path.exists(img) for img in args.images.split(','))):
         if not check_server(args.api_url):
             print(f"Failed to connect to server at {args.api_url}")
             return 1
@@ -196,7 +244,7 @@ def main():
     model = model.to(device)
     print(f"Using device: {device}")
     
-    # Batch prediction mode
+    # Batch prediction mode for a label
     if args.batch:
         if not args.label:
             print("Error: --label parameter is required for batch prediction")
@@ -210,31 +258,67 @@ def main():
             return 1
             
         print(f"Found {len(image_ids)} images. Starting batch prediction...")
-        results = []
         
-        for idx, image_id in enumerate(image_ids):
-            prediction = predict_single_image(model, image_id, min_rating, max_rating, args.img_size, args.api_url)
-            if prediction is not None:
-                results.append((image_id, prediction))
-                print(f"Image {idx+1}/{len(image_ids)}: {image_id} → Rating: {prediction:.2f}")
+        # Use the multiple image prediction function
+        predictions = predict_multiple_images(model, image_ids, min_rating, max_rating, args.img_size, args.api_url)
         
-        # Print summary
-        avg_rating = sum(r[1] for r in results) / len(results) if results else 0
-        print(f"\nBatch prediction complete. Average rating: {avg_rating:.2f}")
+        # Process results
+        results = [(img_id, rating) for img_id, rating in predictions.items() if rating is not None]
         
+        # Print summary or output JSON
+        if args.json_output:
+            json_output = {
+                "predictions": {img_id: rating for img_id, rating in results},
+                "average": sum(rating for _, rating in results) / len(results) if results else 0
+            }
+            print(json.dumps(json_output))
+        else:
+            for idx, (img_id, rating) in enumerate(results):
+                print(f"Image {idx+1}/{len(results)}: {img_id} → Rating: {rating:.2f}")
+            
+            avg_rating = sum(r[1] for r in results) / len(results) if results else 0
+            print(f"\nBatch prediction complete. Average rating: {avg_rating:.2f}")
+    
+    # Multiple images prediction mode
+    elif args.images:
+        image_paths = [path.strip() for path in args.images.split(',')]
+        print(f"Processing {len(image_paths)} images...")
+        
+        predictions = predict_multiple_images(model, image_paths, min_rating, max_rating, args.img_size, args.api_url)
+        
+        # Output results as JSON or plain text
+        if args.json_output:
+            json_output = {
+                "predictions": {img_path: float(f"{rating:.2f}") if rating is not None else None 
+                              for img_path, rating in predictions.items()}
+            }
+            print(json.dumps(json_output))
+        else:
+            for img_path, rating in predictions.items():
+                if rating is not None:
+                    print(f"Image: {img_path}, Rating: {rating:.2f}")
+                else:
+                    print(f"Image: {img_path}, Rating: Failed")
+    
     # Single image prediction mode
     elif args.image:
         prediction = predict_single_image(model, args.image, min_rating, max_rating, args.img_size, args.api_url)
         if prediction is not None:
-            # Make sure this format matches what we're looking for in predictImage.js
-            print(f"Predicted rating: {prediction:.2f}")
-            # Also print in a different format as backup 
-            print(f"Rating={prediction:.2f}")
+            if args.json_output:
+                print(json.dumps({"prediction": float(f"{prediction:.2f}")}))
+            else:
+                # Make sure this format matches what we're looking for in predictImage.js
+                print(f"Predicted rating: {prediction:.2f}")
+                # Also print in a different format as backup 
+                print(f"Rating={prediction:.2f}")
         else:
-            print("Failed to make prediction")
+            if args.json_output:
+                print(json.dumps({"error": "Failed to make prediction"}))
+            else:
+                print("Failed to make prediction")
             return 1
     else:
-        print("Error: Either --image or --batch with --label must be specified")
+        print("Error: Either --image, --images, or --batch with --label must be specified")
         return 1
     
     return 0

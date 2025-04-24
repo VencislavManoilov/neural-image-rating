@@ -11,11 +11,62 @@ const logger = require('./logger');
  * @returns {Promise<number|null>} - Promise resolving to the predicted rating or null on error
  */
 async function predictImage(imagePath, labelName) {
+  // For single image prediction, call the batch function with one image
+  const results = await predictImagesInternal([imagePath], labelName);
+  return results[imagePath] || null;
+}
+
+/**
+ * Predicts ratings for a batch of images using a trained model
+ * 
+ * @param {string[]} imagePaths - Array of paths to the image files
+ * @param {string} labelName - Name of the label (model) to use
+ * @returns {Promise<{imagePath: string, rating: number|null}[]>} - Promise resolving to array of predictions
+ */
+async function predictBatch(imagePaths, labelName) {
+  // Prevent empty batch
+  if (!imagePaths || imagePaths.length === 0) {
+    return [];
+  }
+  
+  logger.info(`Batch predicting ratings for ${imagePaths.length} images using model ${labelName}`);
+  
+  // Process images in larger batches to reduce Python process spawning
+  const batchSize = 50;  // Increased from 10 to 50
+  const results = [];
+  
+  for (let i = 0; i < imagePaths.length; i += batchSize) {
+    const batch = imagePaths.slice(i, i + batchSize);
+    const predictions = await predictImagesInternal(batch, labelName);
+    
+    const batchResults = batch.map(imagePath => ({
+      imagePath,
+      rating: predictions[imagePath] || null
+    }));
+    
+    results.push(...batchResults);
+    
+    // Log progress
+    logger.info(`Processed ${Math.min(i + batchSize, imagePaths.length)}/${imagePaths.length} images`);
+  }
+  
+  return results;
+}
+
+/**
+ * Internal function to predict ratings for multiple images at once
+ * 
+ * @param {string[]} imagePaths - Array of paths to the image files
+ * @param {string} labelName - Name of the label (model) to use
+ * @returns {Promise<Object>} - Promise resolving to object mapping image paths to ratings
+ */
+async function predictImagesInternal(imagePaths, labelName) {
   return new Promise((resolve, reject) => {
-    // Check if image exists
-    if (!fs.existsSync(imagePath)) {
-      logger.error(`Image file not found: ${imagePath}`);
-      return resolve(null);
+    // Check if at least one image exists
+    const validImages = imagePaths.filter(path => fs.existsSync(path));
+    if (validImages.length === 0) {
+      logger.error(`No valid image files found in the batch`);
+      return resolve({});
     }
 
     // Path to the predict script
@@ -25,10 +76,13 @@ async function predictImage(imagePath, labelName) {
     if (!fs.existsSync(predictScript)) {
       logger.error(`Prediction script not found: ${predictScript}`);
       
-      // For testing, return a random rating between 1-10
-      const fallbackRating = 1 + Math.random() * 9;
-      logger.warn(`Using fallback rating: ${fallbackRating.toFixed(2)}`);
-      return resolve(parseFloat(fallbackRating.toFixed(2)));
+      // For testing, return random ratings
+      const fallbackRatings = {};
+      imagePaths.forEach(path => {
+        fallbackRatings[path] = parseFloat((1 + Math.random() * 9).toFixed(2));
+      });
+      logger.warn(`Using fallback ratings for ${imagePaths.length} images`);
+      return resolve(fallbackRatings);
     }
     
     const trainDir = path.dirname(predictScript);
@@ -40,10 +94,13 @@ async function predictImage(imagePath, labelName) {
     if (!fs.existsSync(modelPath)) {
       logger.error(`Model not found for label '${labelName}': ${modelPath}`);
       
-      // For testing, return a random rating between 1-10
-      const fallbackRating = 1 + Math.random() * 9;
-      logger.warn(`Using fallback rating: ${fallbackRating.toFixed(2)}`);
-      return resolve(parseFloat(fallbackRating.toFixed(2)));
+      // For testing, return random ratings
+      const fallbackRatings = {};
+      imagePaths.forEach(path => {
+        fallbackRatings[path] = parseFloat((1 + Math.random() * 9).toFixed(2));
+      });
+      logger.warn(`Using fallback ratings for ${imagePaths.length} images`);
+      return resolve(fallbackRatings);
     }
 
     // Path to Python executable in the virtual environment
@@ -63,15 +120,19 @@ async function predictImage(imagePath, labelName) {
     }
 
     function runPrediction(pythonPath) {
-      // Debug log for the command being executed
-      logger.info(`Running command: ${pythonPath} ${predictScript} --model ${modelPath} --image ${imagePath}`);
-      
-      // Spawn python to execute the script
-      const predictProcess = spawn(pythonPath, [
+      // Prepare the command arguments
+      const args = [
         predictScript,
         '--model', modelPath,
-        '--image', imagePath
-      ], {
+        '--images', imagePaths.join(','),
+        '--json-output'  // Request JSON output for easier parsing
+      ];
+      
+      // Debug log for the command being executed
+      logger.info(`Running batch prediction for ${imagePaths.length} images using ${labelName} model`);
+      
+      // Spawn python to execute the script
+      const predictProcess = spawn(pythonPath, args, {
         cwd: trainDir,
         env: { ...process.env }
       });
@@ -83,8 +144,6 @@ async function predictImage(imagePath, labelName) {
       predictProcess.stdout.on('data', (data) => {
         const dataStr = data.toString();
         stdout += dataStr;
-        // Log full output for debugging
-        logger.info(`Prediction stdout: ${dataStr.trim()}`);
       });
       
       // Collect stderr data
@@ -98,93 +157,49 @@ async function predictImage(imagePath, labelName) {
       predictProcess.on('close', (code) => {
         if (code === 0) {
           try {
-            // Log full stdout for debugging
-            logger.info(`Full prediction output: ${stdout}`);
+            // Parse JSON output
+            const outputData = JSON.parse(stdout);
             
-            // Try multiple regex patterns to match the rating
-            let rating = null;
-            
-            // Pattern 1: "Predicted rating: 8.45"
-            const ratingMatch1 = stdout.match(/Predicted rating:\s*(\d+\.\d+)/i);
-            if (ratingMatch1 && ratingMatch1[1]) {
-              rating = parseFloat(ratingMatch1[1]);
-            }
-            
-            // Pattern 2: Just find any floating point number in the output as fallback
-            if (rating === null) {
-              const ratingMatch2 = stdout.match(/(\d+\.\d+)/);
-              if (ratingMatch2 && ratingMatch2[1]) {
-                rating = parseFloat(ratingMatch2[1]);
-              }
-            }
-            
-            if (rating !== null) {
-              logger.info(`Predicted rating for ${path.basename(imagePath)}: ${rating}`);
-              resolve(rating);
+            if (outputData && outputData.predictions) {
+              logger.info(`Successfully predicted ratings for ${Object.keys(outputData.predictions).length} images`);
+              resolve(outputData.predictions);
             } else {
-              // For testing purposes, return a random rating between 1-10 if no match found
-              // This is a temporary solution until the Python script is fixed
-              const fallbackRating = 1 + Math.random() * 9;
-              logger.warn(`Could not parse rating from output, using fallback: ${fallbackRating.toFixed(2)}`);
-              logger.warn(`Output was: ${stdout}`);
-              resolve(parseFloat(fallbackRating.toFixed(2)));
+              logger.error('Invalid JSON output from prediction script');
+              resolve({});
             }
           } catch (error) {
-            logger.error(`Error processing prediction result: ${error.message}`);
-            resolve(null);
+            logger.error(`Error parsing prediction JSON: ${error.message}`);
+            logger.error(`Raw output: ${stdout}`);
+            
+            // Fallback with random ratings if JSON parsing fails
+            const fallbackRatings = {};
+            imagePaths.forEach(path => {
+              fallbackRatings[path] = parseFloat((1 + Math.random() * 9).toFixed(2));
+            });
+            logger.warn(`Using fallback ratings after JSON parse error`);
+            resolve(fallbackRatings);
           }
         } else {
           logger.error(`Prediction process exited with code ${code}`);
           logger.error(stderr);
-          resolve(null);
+          resolve({});
         }
       });
       
       // Handle process errors
       predictProcess.on('error', (error) => {
         logger.error(`Error spawning prediction process: ${error.message}`);
-        resolve(null);
+        resolve({});
       });
       
       // Add timeout to prevent hanging
       setTimeout(() => {
         logger.error('Prediction process timed out');
         predictProcess.kill();
-        resolve(null);
-    }, 10 * 60 * 1000); // 10 min timeout
+        resolve({});
+      }, 10 * 60 * 1000); // 10 min timeout
     }
   });
-}
-
-/**
- * Predicts ratings for a batch of images using a trained model
- * 
- * @param {string[]} imagePaths - Array of paths to the image files
- * @param {string} labelName - Name of the label (model) to use
- * @returns {Promise<{imagePath: string, rating: number|null}[]>} - Promise resolving to array of predictions
- */
-async function predictBatch(imagePaths, labelName) {
-  const results = [];
-  
-  logger.info(`Batch predicting ratings for ${imagePaths.length} images using model ${labelName}`);
-  
-  // Process images in batches of 10 to avoid overwhelming the system
-  const batchSize = 10;
-  for (let i = 0; i < imagePaths.length; i += batchSize) {
-    const batch = imagePaths.slice(i, i + batchSize);
-    const batchPromises = batch.map(async (imagePath) => {
-      const rating = await predictImage(imagePath, labelName);
-      return { imagePath, rating };
-    });
-    
-    const batchResults = await Promise.all(batchPromises);
-    results.push(...batchResults);
-    
-    // Log progress
-    logger.info(`Processed ${Math.min(i + batchSize, imagePaths.length)}/${imagePaths.length} images`);
-  }
-  
-  return results;
 }
 
 /**

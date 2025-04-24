@@ -2,7 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const { predictImage } = require('./predictImage');
+const { predictImage, predictBatch } = require('./predictImage');
 const logger = require('./logger');
 
 const SITE_URL = process.env.SITE_URL;
@@ -210,42 +210,43 @@ class fetchVideos {
     
     logger.info(`Predicting ratings for ${videoObj.images.length} images using model ${this.labelForRating}`);
     
-    // Initialize ratings array with the same length as images array
-    videoObj.ratings = new Array(videoObj.images.length).fill(null);
-    
-    // Predict ratings for each image
-    for (let i = 0; i < videoObj.images.length; i++) {
-      const imagePath = videoObj.images[i];
-      try {
-        logger.info(`Predicting rating for image ${i+1}/${videoObj.images.length}: ${imagePath}`);
-        const rating = await predictImage(imagePath, this.labelForRating);
-        
-        // Debug log the received rating
-        logger.info(`Received rating for ${imagePath}: ${rating}`);
-        
-        // Store the rating directly in the ratings array
-        videoObj.ratings[i] = rating;
-      } catch (error) {
-        logger.error(`Error predicting rating for image ${imagePath}: ${error.message}`);
-        videoObj.ratings[i] = null;
-      }
-    }
-    
-    // Calculate average rating (excluding null values)
-    const validRatings = videoObj.ratings.filter(rating => rating !== null);
-    if (validRatings.length > 0) {
-      const sum = validRatings.reduce((a, b) => a + b, 0);
-      videoObj.averageRating = sum / validRatings.length;
-      // Round to 2 decimal places for cleaner display
-      videoObj.averageRating = Math.round(videoObj.averageRating * 100) / 100;
+    try {
+      // Use batch prediction for all images at once
+      const batchResults = await predictBatch(videoObj.images, this.labelForRating);
       
-      // Debug log all ratings
-      logger.info(`All ratings for video: ${JSON.stringify(videoObj.ratings)}`);
-    } else {
+      // Debug log the batch results
+      logger.info(`Received batch predictions for ${batchResults.length} images`);
+      
+      // Create a mapping of imagePath to rating for easier access
+      const ratingMap = {};
+      batchResults.forEach(result => {
+        ratingMap[result.imagePath] = result.rating;
+      });
+      
+      // Initialize ratings array and fill with results in the same order as images
+      videoObj.ratings = videoObj.images.map(imagePath => ratingMap[imagePath] || null);
+      
+      // Calculate average rating (excluding null values)
+      const validRatings = videoObj.ratings.filter(rating => rating !== null);
+      if (validRatings.length > 0) {
+        const sum = validRatings.reduce((a, b) => a + b, 0);
+        videoObj.averageRating = sum / validRatings.length;
+        // Round to 2 decimal places for cleaner display
+        videoObj.averageRating = Math.round(videoObj.averageRating * 100) / 100;
+        
+        // Debug log all ratings
+        logger.info(`All ratings for video: ${JSON.stringify(videoObj.ratings)}`);
+      } else {
+        videoObj.averageRating = null;
+      }
+      
+      logger.info(`Average rating for video: ${videoObj.averageRating} (${validRatings.length}/${videoObj.images.length} valid ratings)`);
+    } catch (error) {
+      logger.error(`Error predicting ratings for video: ${error.message}`);
+      // Initialize empty ratings and null average if prediction fails
+      videoObj.ratings = new Array(videoObj.images.length).fill(null);
       videoObj.averageRating = null;
     }
-    
-    logger.info(`Average rating for video: ${videoObj.averageRating} (${validRatings.length}/${videoObj.images.length} valid ratings)`);
   }
 
   getVideos() {
