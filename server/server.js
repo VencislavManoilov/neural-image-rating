@@ -133,25 +133,35 @@ app.get("/fetch-videos", async (req, res) => {
         // Get optional label parameter for rating predictions
         const label = req.query.label;
         
-        logger.info(`Fetching videos${label ? ` with ratings using label: ${label}` : ''}`);
+        // Get optional limit parameter to restrict number of videos
+        const limit = parseInt(req.query.limit) || 65;
+        
+        logger.info(`Fetching videos${label ? ` with ratings using label: ${label}` : ''} (limit: ${limit})`);
         
         const html = await axios.get(SITE_URL, {
             headers: {
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-encoding': 'gzip, deflate, br, zstd',
-            'accept-language': 'en-US,en;q=0.9',
-            'cache-control': 'max-age=0',
-            'sec-ch-ua': '"Google Chrome";v="135", "Not-A.Brand";v="8", "Chromium";v="135"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': 'Linux',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'accept-language': 'en-US,en;q=0.9',
+                'cache-control': 'max-age=0',
+                'sec-ch-ua': '"Google Chrome";v="135", "Not-A.Brand";v="8", "Chromium";v="135"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': 'Linux',
+                'sec-fetch-dest': 'document',
+                'sec-fetch-mode': 'navigate',
+                'sec-fetch-site': 'none',
+                'sec-fetch-user': '?1',
+                'upgrade-insecure-requests': '1',
+                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
             }
         });
+        
+        // Try to explicitly trigger garbage collection if available
+        if (global.gc) {
+            global.gc();
+            logger.info('Garbage collection triggered before processing videos');
+        }
+        
+        // Initialize the video fetcher with HTML content and optional label
         const videos = new fetchVideos(html.data, label);
 
         // Await the fetchVideos method to complete
@@ -166,8 +176,11 @@ app.get("/fetch-videos", async (req, res) => {
             logger.info(`Found ${videosWithRatings.length} videos with non-empty ratings out of ${fetchedVideos.length} total videos`);
         }
 
+        // Calculate total images across all videos
+        const totalImages = fetchedVideos.reduce((sum, video) => sum + (video.images ? video.images.length : 0), 0);
+
         const responseData = {
-            message: `Successfully fetched ${fetchedVideos.length} videos with ${fetchedVideos.reduce((sum, video) => sum + video.images.length, 0)} images`,
+            message: `Successfully fetched ${fetchedVideos.length} videos with ${totalImages} images`,
             videos: fetchedVideos
         };
         
@@ -178,6 +191,12 @@ app.get("/fetch-videos", async (req, res) => {
             responseData.averageRating = videosWithRatings.length > 0 
                 ? videosWithRatings.reduce((sum, v) => sum + v.averageRating, 0) / videosWithRatings.length 
                 : 0;
+        }
+
+        // Try to explicitly trigger garbage collection after processing
+        if (global.gc) {
+            global.gc();
+            logger.info('Garbage collection triggered after processing videos');
         }
 
         res.status(200).json(responseData);
@@ -317,6 +336,13 @@ app.get("/health", (req, res) => {
         ensureSchema().then(async () => {
             // Set up training environment
             setupTrainingEnv();
+            
+            // Enable garbage collection exposure if running with --expose-gc
+            if (global.gc) {
+                logger.info('Garbage collection is exposed and will be used for memory optimization');
+            } else {
+                logger.info('Garbage collection is not exposed. For better memory management, run with: node --expose-gc server.js');
+            }
             
             app.listen(PORT, () => {
                 logger.info(`Server is running on port ${PORT}`);

@@ -21,7 +21,157 @@ class fetchVideos {
     return path.join(os.tmpdir(), filename);
   }
 
+  // Clean up temporary files created for a video
+  cleanupTempFiles(videoObj) {
+    try {
+      // Remove all image files
+      if (videoObj.images && videoObj.images.length > 0) {
+        videoObj.images.forEach(imgPath => {
+          if (fs.existsSync(imgPath)) {
+            fs.unlinkSync(imgPath);
+          }
+        });
+      }
+      
+      // Check if any images are in a temp directory and remove the directory too
+      const tempDirs = new Set();
+      videoObj.images.forEach(imgPath => {
+        const dir = path.dirname(imgPath);
+        if (dir.includes(os.tmpdir())) {
+          tempDirs.add(dir);
+        }
+      });
+      
+      // Remove empty temp directories
+      tempDirs.forEach(dir => {
+        if (fs.existsSync(dir)) {
+          // Check if directory is empty
+          if (fs.readdirSync(dir).length === 0) {
+            fs.rmdirSync(dir);
+          }
+        }
+      });
+    } catch (err) {
+      logger.error('Error cleaning up temp files:', err);
+    }
+  }
+
+  async processVideoElement(element) {
+    const { thumbnailUrl, mediabook, videoUrl } = element;
+    
+    const newVideo = {
+      images: [],
+      ratings: [],
+      averageRating: null,
+      url: videoUrl
+    };
+    
+    try {
+      // Download thumbnail if available
+      if (thumbnailUrl && thumbnailUrl.startsWith('http')) {
+        await this.downloadThumbnail(thumbnailUrl, newVideo);
+      }
+
+      // Download and process video if available
+      if (mediabook && mediabook.startsWith('http')) {
+        await this.processVideo(mediabook, newVideo);
+      }
+
+      // Only process videos with images
+      if (newVideo.images.length > 0) {
+        // If a label is provided, predict ratings for all images
+        if (this.labelForRating) {
+          logger.info(`Rating video with ${newVideo.images.length} images`);
+          await this.predictRatings(newVideo);
+        }
+        
+        // Create a copy to return without image paths
+        const videoWithoutImages = {
+          url: newVideo.url,
+          ratings: [...newVideo.ratings],
+          averageRating: newVideo.averageRating,
+          // Keep a count of images but not the actual paths
+          imageCount: newVideo.images.length
+        };
+        
+        // Clean up temp files immediately after prediction to save memory
+        this.cleanupTempFiles(newVideo);
+        
+        return videoWithoutImages;
+      }
+      
+      return null;
+    } catch (err) {
+      logger.error('Error processing media element:', err);
+      // Clean up any resources that might have been created
+      this.cleanupTempFiles(newVideo);
+      return null;
+    }
+  }
+
+  async predictRatings(videoObj) {
+    if (!this.labelForRating || videoObj.images.length === 0) {
+      videoObj.averageRating = null;
+      return;
+    }
+    
+    logger.info(`Predicting ratings for ${videoObj.images.length} images using model ${this.labelForRating}`);
+    
+    try {
+      // Break down image prediction into smaller batches
+      const PREDICTION_BATCH_SIZE = 10;
+      const results = [];
+      
+      for (let i = 0; i < videoObj.images.length; i += PREDICTION_BATCH_SIZE) {
+        const imageBatch = videoObj.images.slice(i, i + PREDICTION_BATCH_SIZE);
+        
+        // Use batch prediction for current batch of images
+        const batchResults = await predictBatch(imageBatch, this.labelForRating);
+        
+        if (batchResults && batchResults.length > 0) {
+          results.push(...batchResults);
+        }
+        
+        // Small delay to allow for garbage collection
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      // Create a mapping of imagePath to rating for easier access
+      const ratingMap = {};
+      results.forEach(result => {
+        if (result && result.imagePath) {
+          ratingMap[result.imagePath] = result.rating;
+        }
+      });
+      
+      // Initialize ratings array and fill with results in the same order as images
+      videoObj.ratings = videoObj.images.map(imagePath => ratingMap[imagePath] || null);
+      
+      // Calculate average rating (excluding null values)
+      const validRatings = videoObj.ratings.filter(rating => rating !== null);
+      if (validRatings.length > 0) {
+        const sum = validRatings.reduce((a, b) => a + b, 0);
+        videoObj.averageRating = sum / validRatings.length;
+        // Round to 2 decimal places for cleaner display
+        videoObj.averageRating = Math.round(videoObj.averageRating * 100) / 100;
+      } else {
+        videoObj.averageRating = null;
+      }
+      
+      logger.info(`Average rating for video: ${videoObj.averageRating} (${validRatings.length}/${videoObj.images.length} valid ratings)`);
+    } catch (error) {
+      logger.error(`Error predicting ratings for video: ${error.message}`);
+      // Initialize empty ratings and null average if prediction fails
+      videoObj.ratings = new Array(videoObj.images.length).fill(null);
+      videoObj.averageRating = null;
+    }
+  }
+
   async fetchVideos() {
+    if (!this.html) {
+      return logger.error('HTML content is not provided.');
+    }
+
     try {
       // Parse HTML with cheerio
       const $ = cheerio.load(this.html);
@@ -31,16 +181,13 @@ class fetchVideos {
         logger.info(`Will rate videos using label: ${this.labelForRating}`);
       }
       
-      // Create an array to hold all download promises
-      const downloadPromises = [];
-      
-      // Limit to 5 videos for testing
+      // Limit to 65 videos as in original code
       const maxVideos = 65;
       let videoCount = 0;
       
-      // Find all elements with data-mediumthumb attribute
+      // Find all video elements
+      const videoElements = [];
       $('[data-mediumthumb]').each((i, element) => {
-        // Limit the number of videos for testing purposes
         if (videoCount >= maxVideos) return;
         videoCount++;
         
@@ -51,66 +198,58 @@ class fetchVideos {
         
         const thumbnailUrl = $(element).attr('data-mediumthumb');
         const mediabook = $(element).attr('data-mediabook');
-        const newVideo = {
-          images: [],
-          ratings: [],
-          averageRating: null,
-          url: videoUrl // Add the video URL to the object
-        };
-
-        const processVideoPromise = (async () => {
-          try {
-            // Download thumbnail if available
-            if (thumbnailUrl && thumbnailUrl.startsWith('http')) {
-              await this.downloadThumbnail(thumbnailUrl, newVideo);
-            }
-
-            // Download and process video if available
-            if (mediabook && mediabook.startsWith('http')) {
-              await this.processVideo(mediabook, newVideo);
-            }
-
-            // Only add videos with images
-            if (newVideo.images.length > 0) {
-              // If a label is provided, predict ratings for all images
-              if (this.labelForRating) {
-                logger.info(`Rating video ${this.videos.length + 1} with ${newVideo.images.length} images`);
-                await this.predictRatings(newVideo);
-              }
-              
-              this.videos.push(newVideo);
-            }
-          } catch (err) {
-            logger.error('Error processing media element:', err);
-          }
-        })();
-
-        // Add this promise to our array of promises to track
-        downloadPromises.push(processVideoPromise);
+        
+        videoElements.push({
+          thumbnailUrl,
+          mediabook,
+          videoUrl
+        });
       });
-
-      // Wait for all downloads to complete
-      await Promise.all(downloadPromises);
       
-      // Debug log the videos array to see if ratings were set
-      if (this.labelForRating) {
-        logger.info(`Number of videos with ratings: ${this.videos.filter(v => v.ratings && v.ratings.length > 0).length}`);
-        // Log the first video's ratings as an example
-        if (this.videos.length > 0) {
-          logger.info(`First video ratings: ${JSON.stringify(this.videos[0].ratings)}`);
+      logger.info(`Found ${videoElements.length} video elements to process`);
+      
+      // Process videos in smaller batches to control memory usage
+      const BATCH_SIZE = 5;  // Process 5 videos at a time
+      
+      for (let i = 0; i < videoElements.length; i += BATCH_SIZE) {
+        logger.info(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1} of ${Math.ceil(videoElements.length/BATCH_SIZE)}`);
+        
+        const batch = videoElements.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(element => this.processVideoElement(element));
+        
+        try {
+          // Wait for current batch to finish before proceeding
+          const processedVideos = await Promise.all(batchPromises);
+          
+          // Add only valid videos with ratings
+          const validVideos = processedVideos.filter(video => video !== null);
+          
+          logger.info(`Batch completed with ${validVideos.length} valid videos of ${batch.length} processed`);
+          
+          this.videos.push(...validVideos);
+        } catch (err) {
+          logger.error(`Error processing batch: ${err.message}`);
+          // Continue with next batch
         }
+        
+        // Force garbage collection between batches
+        global.gc && global.gc();
       }
       
-      // Sort videos by average rating (highest first)
+      // Sort videos by average rating (highest first) if we have ratings
       if (this.labelForRating) {
         this.videos.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
+        
+        // Log some debug info about ratings
+        const videosWithRatings = this.videos.filter(v => v.averageRating !== null);
+        logger.info(`Total videos with ratings: ${videosWithRatings.length} out of ${this.videos.length}`);
       }
       
       logger.info(`Videos fetched successfully: ${this.videos.length} videos${this.labelForRating ? ' with ratings' : ''}`);
       return this.videos;
     } catch (error) {
       logger.error('Error fetching videos:', error);
-      throw error;
+      return [];  // Return empty array instead of throwing to avoid crashing
     }
   }
 
@@ -155,10 +294,16 @@ class fetchVideos {
         videoObj.images.push(frame);
       });
       
-      // Clean up video file
-      fs.unlinkSync(videoPath);
+      // Clean up video file immediately to save space
+      if (fs.existsSync(videoPath)) {
+        fs.unlinkSync(videoPath);
+      }
     } catch (err) {
       logger.error('Error processing video:', err);
+      // Make sure to clean up even on error
+      if (fs.existsSync(videoPath)) {
+        fs.unlinkSync(videoPath);
+      }
     }
   }
 
@@ -219,53 +364,6 @@ class fetchVideos {
         resolve([]); // Return empty array to avoid breaking the chain
       }
     });
-  }
-
-  async predictRatings(videoObj) {
-    if (!this.labelForRating || videoObj.images.length === 0) {
-      videoObj.averageRating = null;
-      return;
-    }
-    
-    logger.info(`Predicting ratings for ${videoObj.images.length} images using model ${this.labelForRating}`);
-    
-    try {
-      // Use batch prediction for all images at once
-      const batchResults = await predictBatch(videoObj.images, this.labelForRating);
-      
-      // Debug log the batch results
-      logger.info(`Received batch predictions for ${batchResults.length} images`);
-      
-      // Create a mapping of imagePath to rating for easier access
-      const ratingMap = {};
-      batchResults.forEach(result => {
-        ratingMap[result.imagePath] = result.rating;
-      });
-      
-      // Initialize ratings array and fill with results in the same order as images
-      videoObj.ratings = videoObj.images.map(imagePath => ratingMap[imagePath] || null);
-      
-      // Calculate average rating (excluding null values)
-      const validRatings = videoObj.ratings.filter(rating => rating !== null);
-      if (validRatings.length > 0) {
-        const sum = validRatings.reduce((a, b) => a + b, 0);
-        videoObj.averageRating = sum / validRatings.length;
-        // Round to 2 decimal places for cleaner display
-        videoObj.averageRating = Math.round(videoObj.averageRating * 100) / 100;
-        
-        // Debug log all ratings
-        logger.info(`All ratings for video: ${JSON.stringify(videoObj.ratings)}`);
-      } else {
-        videoObj.averageRating = null;
-      }
-      
-      logger.info(`Average rating for video: ${videoObj.averageRating} (${validRatings.length}/${videoObj.images.length} valid ratings)`);
-    } catch (error) {
-      logger.error(`Error predicting ratings for video: ${error.message}`);
-      // Initialize empty ratings and null average if prediction fails
-      videoObj.ratings = new Array(videoObj.images.length).fill(null);
-      videoObj.averageRating = null;
-    }
   }
 
   getVideos() {

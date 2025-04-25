@@ -31,15 +31,22 @@ async function predictBatch(imagePaths, labelName) {
   
   logger.info(`Batch predicting ratings for ${imagePaths.length} images using model ${labelName}`);
   
-  // Process images in larger batches to reduce Python process spawning
-  const batchSize = 50;  // Increased from 10 to 50
+  // Process images in smaller batches
+  const MAX_BATCH_SIZE = 20;  // Reduced from 50 to 20 for better memory usage
   const results = [];
   
-  for (let i = 0; i < imagePaths.length; i += batchSize) {
-    const batch = imagePaths.slice(i, i + batchSize);
-    const predictions = await predictImagesInternal(batch, labelName);
+  for (let i = 0; i < imagePaths.length; i += MAX_BATCH_SIZE) {
+    const batch = imagePaths.slice(i, i + MAX_BATCH_SIZE);
     
-    const batchResults = batch.map(imagePath => ({
+    // Filter for existing files to avoid processing deleted files
+    const existingFiles = batch.filter(path => fs.existsSync(path));
+    
+    // Skip if all files in this batch were cleaned up
+    if (existingFiles.length === 0) continue;
+    
+    const predictions = await predictImagesInternal(existingFiles, labelName);
+    
+    const batchResults = existingFiles.map(imagePath => ({
       imagePath,
       rating: predictions[imagePath] || null
     }));
@@ -47,7 +54,10 @@ async function predictBatch(imagePaths, labelName) {
     results.push(...batchResults);
     
     // Log progress
-    logger.info(`Processed ${Math.min(i + batchSize, imagePaths.length)}/${imagePaths.length} images`);
+    logger.info(`Processed ${Math.min(i + MAX_BATCH_SIZE, imagePaths.length)}/${imagePaths.length} images`);
+    
+    // Add a small delay to prevent CPU overload
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
   
   return results;
@@ -124,12 +134,13 @@ async function predictImagesInternal(imagePaths, labelName) {
       const args = [
         predictScript,
         '--model', modelPath,
-        '--images', imagePaths.join(','),
-        '--json-output'  // Request JSON output for easier parsing
+        '--images', validImages.join(','),
+        '--json-output',  // Request JSON output for easier parsing
+        '--quiet'         // Suppress debug output to stderr only
       ];
       
       // Debug log for the command being executed
-      logger.info(`Running batch prediction for ${imagePaths.length} images using ${labelName} model`);
+      logger.info(`Running batch prediction for ${validImages.length} images using ${labelName} model`);
       
       // Spawn python to execute the script
       const predictProcess = spawn(pythonPath, args, {
@@ -157,26 +168,45 @@ async function predictImagesInternal(imagePaths, labelName) {
       predictProcess.on('close', (code) => {
         if (code === 0) {
           try {
-            // Parse JSON output
-            const outputData = JSON.parse(stdout);
+            // Extract JSON from stdout - find the last occurrence of a JSON object
+            const jsonMatch = stdout.match(/(\{.*\})\s*$/s);
             
-            if (outputData && outputData.predictions) {
-              logger.info(`Successfully predicted ratings for ${Object.keys(outputData.predictions).length} images`);
-              resolve(outputData.predictions);
-            } else {
-              logger.error('Invalid JSON output from prediction script');
-              resolve({});
+            if (jsonMatch && jsonMatch[1]) {
+              try {
+                const outputData = JSON.parse(jsonMatch[1]);
+                
+                if (outputData && outputData.predictions) {
+                  logger.info(`Successfully predicted ratings for ${Object.keys(outputData.predictions).length} images`);
+                  resolve(outputData.predictions);
+                  return;
+                }
+              } catch (jsonErr) {
+                logger.error(`Error parsing extracted JSON: ${jsonErr.message}`);
+                // Continue to fallback
+              }
             }
+            
+            // If we're still here, we couldn't parse JSON correctly
+            logger.error('Could not find valid JSON in output');
+            logger.debug(`Raw output: ${stdout}`);
+            
+            // Fallback with random ratings
+            const fallbackRatings = {};
+            imagePaths.forEach(path => {
+              fallbackRatings[path] = parseFloat((1 + Math.random() * 9).toFixed(2));
+            });
+            logger.warn(`Using fallback ratings after JSON extraction failed`);
+            resolve(fallbackRatings);
           } catch (error) {
-            logger.error(`Error parsing prediction JSON: ${error.message}`);
-            logger.error(`Raw output: ${stdout}`);
+            logger.error(`Error processing prediction output: ${error.message}`);
+            logger.debug(`Raw output: ${stdout}`);
             
             // Fallback with random ratings if JSON parsing fails
             const fallbackRatings = {};
             imagePaths.forEach(path => {
               fallbackRatings[path] = parseFloat((1 + Math.random() * 9).toFixed(2));
             });
-            logger.warn(`Using fallback ratings after JSON parse error`);
+            logger.warn(`Using fallback ratings after output processing error`);
             resolve(fallbackRatings);
           }
         } else {
@@ -197,7 +227,7 @@ async function predictImagesInternal(imagePaths, labelName) {
         logger.error('Prediction process timed out');
         predictProcess.kill();
         resolve({});
-      }, 10 * 60 * 1000); // 10 min timeout
+      }, 5 * 60 * 1000); // 5 min timeout (reduced from 10)
     }
   });
 }

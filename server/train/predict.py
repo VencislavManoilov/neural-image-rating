@@ -10,6 +10,7 @@ import requests
 import numpy as np
 import sys
 import json
+import gc
 from dotenv import load_dotenv
 from server_check import check_server
 
@@ -27,7 +28,12 @@ def parse_arguments():
     parser.add_argument('--img-size', type=int, default=224, help='Image size for model input')
     parser.add_argument('--batch', action='store_true', help='Enable batch prediction for all images of a label')
     parser.add_argument('--json-output', action='store_true', help='Output results as JSON')
+    parser.add_argument('--quiet', action='store_true', help='Suppress debug output and only print JSON')
     return parser.parse_args()
+
+# Create a function to print to stderr for debug messages when using JSON output
+def debug_print(message):
+    print(message, file=sys.stderr)
 
 def create_model():
     """Create the same model architecture as used in training"""
@@ -103,191 +109,113 @@ def prepare_image(image_path, img_size):
             
         # Apply transformations
         image_tensor = transform(image).unsqueeze(0)  # Add batch dimension
+        
+        # Clear the image object to free memory
+        image = None
+        
         return image_tensor
     except Exception as e:
         print(f"Error loading image {image_path}: {e}")
         return None
 
-def fetch_image_from_api(image_id, api_url):
-    """Fetch an image from the API by its ID"""
-    try:
-        response = requests.get(f"{api_url}/get/{image_id}")
-        if response.status_code == 200:
-            return Image.open(io.BytesIO(response.content)).convert('RGB')
-        else:
-            print(f"Failed to fetch image {image_id}: Status {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"Error fetching image {image_id}: {e}")
-        return None
-
-def fetch_label_images(label_name, api_url):
-    """Fetch all images for a specific label"""
-    try:
-        response = requests.get(f"{api_url}/labels/{label_name}")
-        if response.status_code != 200:
-            print(f"Failed to fetch label data: Status {response.status_code}")
-            return []
-            
-        data = response.json()
-        return [item['image'] for item in data.get('labels', [])]
-    except Exception as e:
-        print(f"Error fetching label data: {e}")
-        return []
-
-def predict_single_image(model, image_path, min_rating, max_rating, img_size, api_url=None):
-    """Make a prediction for a single image"""
-    # Load image either from file or API
-    if os.path.exists(image_path):
-        image_tensor = prepare_image(image_path, img_size)
-    elif api_url:
-        # Try to fetch from API
-        image = fetch_image_from_api(image_path, api_url)
-        if image:
-            transform = transforms.Compose([
-                transforms.Resize((img_size, img_size)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ])
-            image_tensor = transform(image).unsqueeze(0)
-        else:
-            return None
-    else:
-        print(f"Image not found: {image_path}")
-        return None
-    
-    if image_tensor is None:
-        return None
-    
-    # Ensure model is in evaluation mode
-    model.eval()
-    
-    # Move to device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    image_tensor = image_tensor.to(device)
-    
-    # Make prediction
-    with torch.no_grad():
-        output = model(image_tensor)
-    
-    # Convert normalized output back to rating scale
-    prediction = output.item() * (max_rating - min_rating) + min_rating
-    
-    return prediction
-
 def predict_multiple_images(model, image_paths, min_rating, max_rating, img_size, api_url=None):
-    """Make predictions for multiple images at once"""
+    """Make predictions for multiple images at once - memory optimized version"""
     results = {}
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model.eval()
     
-    for image_path in image_paths:
-        # Load image either from file or API
-        if os.path.exists(image_path):
-            image_tensor = prepare_image(image_path, img_size)
-        elif api_url:
-            # Try to fetch from API
-            image = fetch_image_from_api(image_path, api_url)
-            if image:
-                transform = transforms.Compose([
-                    transforms.Resize((img_size, img_size)),
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-                ])
-                image_tensor = transform(image).unsqueeze(0)
-            else:
+    # Process images in small batches to reduce memory usage
+    batch_size = 4  # Reduced batch size
+    
+    for i in range(0, len(image_paths), batch_size):
+        # Clear GPU cache if using CUDA
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        batch = image_paths[i:i+batch_size]
+        
+        for image_path in batch:
+            # Skip files that no longer exist (might have been deleted by Node.js)
+            if not os.path.exists(image_path):
                 results[image_path] = None
                 continue
-        else:
-            print(f"Image not found: {image_path}")
-            results[image_path] = None
-            continue
-        
-        if image_tensor is None:
-            results[image_path] = None
-            continue
-        
-        # Move to device and make prediction
-        image_tensor = image_tensor.to(device)
-        with torch.no_grad():
-            output = model(image_tensor)
-        
-        # Convert normalized output back to rating scale
-        prediction = output.item() * (max_rating - min_rating) + min_rating
-        results[image_path] = prediction
+                
+            try:
+                # Load and prepare image
+                image_tensor = prepare_image(image_path, img_size)
+                
+                if image_tensor is None:
+                    results[image_path] = None
+                    continue
+                
+                # Move to device and make prediction
+                image_tensor = image_tensor.to(device)
+                with torch.no_grad():
+                    output = model(image_tensor)
+                
+                # Convert normalized output back to rating scale
+                prediction = output.item() * (max_rating - min_rating) + min_rating
+                results[image_path] = prediction
+                
+                # Clean up tensors to free memory
+                del image_tensor, output
+                
+            except Exception as e:
+                print(f"Error predicting image {image_path}: {e}")
+                results[image_path] = None
+                
+        # Force Python garbage collection after each mini-batch
+        gc.collect()
     
     return results
 
 def main():
     args = parse_arguments()
     
+    # Configure output based on JSON mode
+    print_fn = debug_print if args.json_output and not args.quiet else print
+    
     # Check if the server is running when we need it
     if args.batch or (args.image and not os.path.exists(args.image)) or \
        (args.images and any(not os.path.exists(img) for img in args.images.split(','))):
         if not check_server(args.api_url):
-            print(f"Failed to connect to server at {args.api_url}")
+            print_fn(f"Failed to connect to server at {args.api_url}")
             return 1
     
     # Load the model
     try:
         model, min_rating, max_rating = load_model(args.model)
-        print(f"Model loaded successfully from {args.model}")
-        print(f"Rating range: {min_rating:.1f} to {max_rating:.1f}")
+        print_fn(f"Model loaded successfully from {args.model}")
+        print_fn(f"Rating range: {min_rating:.1f} to {max_rating:.1f}")
     except Exception as e:
-        print(f"Error loading model: {e}")
+        print_fn(f"Error loading model: {e}")
         return 1
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    print(f"Using device: {device}")
-    
-    # Batch prediction mode for a label
-    if args.batch:
-        if not args.label:
-            print("Error: --label parameter is required for batch prediction")
-            return 1
-            
-        print(f"Fetching images for label '{args.label}'...")
-        image_ids = fetch_label_images(args.label, args.api_url)
-        
-        if not image_ids:
-            print(f"No images found for label '{args.label}'")
-            return 1
-            
-        print(f"Found {len(image_ids)} images. Starting batch prediction...")
-        
-        # Use the multiple image prediction function
-        predictions = predict_multiple_images(model, image_ids, min_rating, max_rating, args.img_size, args.api_url)
-        
-        # Process results
-        results = [(img_id, rating) for img_id, rating in predictions.items() if rating is not None]
-        
-        # Print summary or output JSON
-        if args.json_output:
-            json_output = {
-                "predictions": {img_id: rating for img_id, rating in results},
-                "average": sum(rating for _, rating in results) / len(results) if results else 0
-            }
-            print(json.dumps(json_output))
-        else:
-            for idx, (img_id, rating) in enumerate(results):
-                print(f"Image {idx+1}/{len(results)}: {img_id} → Rating: {rating:.2f}")
-            
-            avg_rating = sum(r[1] for r in results) / len(results) if results else 0
-            print(f"\nBatch prediction complete. Average rating: {avg_rating:.2f}")
+    print_fn(f"Using device: {device}")
     
     # Multiple images prediction mode
-    elif args.images:
+    if args.images:
         image_paths = [path.strip() for path in args.images.split(',')]
-        print(f"Processing {len(image_paths)} images...")
+        print_fn(f"Processing {len(image_paths)} images...")
+        
+        # Check for existing files
+        image_paths = [path for path in image_paths if os.path.exists(path)]
+        
+        if not image_paths:
+            print_fn("No valid image files to process")
+            if args.json_output:
+                print(json.dumps({"predictions": {}}))
+            return 0
         
         predictions = predict_multiple_images(model, image_paths, min_rating, max_rating, args.img_size, args.api_url)
         
         # Output results as JSON or plain text
         if args.json_output:
+            # Print ONLY the JSON to stdout for parsing
             json_output = {
                 "predictions": {img_path: float(f"{rating:.2f}") if rating is not None else None 
                               for img_path, rating in predictions.items()}
@@ -302,7 +230,16 @@ def main():
     
     # Single image prediction mode
     elif args.image:
-        prediction = predict_single_image(model, args.image, min_rating, max_rating, args.img_size, args.api_url)
+        # Use the multiple image prediction function for consistency
+        if not os.path.exists(args.image):
+            print(f"Image file not found: {args.image}")
+            if args.json_output:
+                print(json.dumps({"error": "File not found"}))
+            return 1
+            
+        predictions = predict_multiple_images(model, [args.image], min_rating, max_rating, args.img_size, args.api_url)
+        prediction = predictions.get(args.image)
+        
         if prediction is not None:
             if args.json_output:
                 print(json.dumps({"prediction": float(f"{prediction:.2f}")}))
@@ -320,6 +257,11 @@ def main():
     else:
         print("Error: Either --image, --images, or --batch with --label must be specified")
         return 1
+    
+    # Final cleanup
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
     
     return 0
 
