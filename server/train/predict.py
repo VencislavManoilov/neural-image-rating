@@ -74,14 +74,20 @@ def load_model(model_path):
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
     
-    # Load the checkpoint
-    checkpoint = torch.load(model_path, map_location='cpu')
+    # Get the appropriate device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Load the checkpoint with weights_only=True to avoid FutureWarning
+    checkpoint = torch.load(model_path, map_location=device, weights_only=True)
     
     # Create model with the same architecture
     model = create_model()
     
     # Load the state dict
     model.load_state_dict(checkpoint['model_state_dict'])
+    
+    # Move model to the device
+    model = model.to(device)
     
     # Get the rating range
     min_rating = checkpoint.get('min_rating', 1.0)
@@ -192,9 +198,8 @@ def main():
         print_fn(f"Error loading model: {e}")
         return 1
     
-    # Set device
+    # Device is already set in load_model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
     print_fn(f"Using device: {device}")
     
     # Multiple images prediction mode
