@@ -1,4 +1,3 @@
-import React from 'react'
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import './rate.css';
@@ -33,8 +32,12 @@ function Rate({ label }) {
       }
     };
 
-    fetchImages();
-  }, []);
+    if(label) {
+      fetchImages();
+    }
+
+    console.log('Label:', label);
+  }, [label]);
 
   // Handle rating submission
   const handleRating = async (rating) => {
@@ -87,11 +90,10 @@ function Rate({ label }) {
 
   // Create array of rating buttons from 1-10
   const ratingButtons = (rating) => {
-    console.log(rating);
     return [...Array(10)].map((_, i) => (
       <button
         key={i + 1}
-        className={"rating-button" + (rating === i + 1 ? ' selected' : '')}
+        className={"rating-button" + (parseInt(rating) === i + 1 ? ' selected' : '')}
         onClick={() => handleRating(i + 1)}
       >
         {i + 1}
@@ -108,7 +110,7 @@ function Rate({ label }) {
   }
 
   return (
-    <div className="container">
+    <div className="rate-container">
       <div className="image-viewer">
         <h3 className="index">{currentIndex}/{images.length}</h3>
         {images.length > 0 ? (
