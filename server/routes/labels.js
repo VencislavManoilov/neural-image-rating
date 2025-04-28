@@ -33,7 +33,7 @@ router.get('/me', async (req, res) => {
 router.get('/all', async (req, res) => {
     try {
         const labels = await knex('labels')
-            .select('label', 'created_at')
+            .select('label', 'trained', 'created_at')
             .where({ userId: req.user.id });
 
         if (labels.length === 0) {
@@ -182,12 +182,31 @@ router.post('/train/:name', async (req, res) => {
         
         // Start training in the background (don't await it)
         trainModel(labelName, DATASET_URL)
-            .then(result => {
-                logger.info(`Training completed for label ${labelName}: ${JSON.stringify(result)}`);
+        .then(result => {
+            logger.info(`Training completed for label ${labelName}: ${JSON.stringify(result)}`);
+            // Update the database to mark the label as trained
+            knex('labels')
+            .where({ label: labelName })
+            .update({ trained: true })
+            .then(() => {
+                logger.info(`Label ${labelName} marked as trained in database`);
             })
-            .catch(error => {
-                logger.error(`Training failed for label ${labelName}: ${JSON.stringify(error)}`);
+            .catch(err => {
+                logger.error(`Failed to update trained status for label ${labelName}: ${err.message}`);
             });
+        })
+        .catch(error => {
+            knex('labels')
+            .where({ label: labelName })
+            .update({ trained: false })
+            .then(() => {
+                logger.info(`Label ${labelName} marked as trained in database`);
+            })
+            .catch(err => {
+                logger.error(`Failed to update trained status for label ${labelName}: ${err.message}`);
+            });
+            logger.error(`Training failed for label ${labelName}: ${JSON.stringify(error)}`);
+        });
         
         // Respond immediately as training will run in the background
         res.json({
