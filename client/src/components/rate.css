@@ -1,9 +1,14 @@
+.rate-container {
+  width: 100%;
+}
+
 .image-viewer {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  width: 100%;
+  width: fit-content;
+  margin: 0 auto;
   max-width: 1200px;
   padding: 20px;
 }

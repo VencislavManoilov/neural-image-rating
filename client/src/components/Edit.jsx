@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import Rate from "./Rate";
+import "./edit.css";
 
 const URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
 
@@ -44,7 +45,12 @@ const Edit = () => {
     return (
         <div className="edit-container">
             <h2>Edit Label</h2>
-            <Rate label={label} />
+            {label && (
+                <>
+                <h3>{label.name}</h3>
+                <Rate label={label} />
+                </>
+            )}
         </div>
     );
 };
