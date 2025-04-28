@@ -90,7 +90,18 @@ function Labels() {
   };
 
   const handleAddNewLabel = async () => {
-    navigate('/add-label');
+    try {
+      await axios.post(URL+'/labels/add', {}, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      window.location.reload();
+    }
+    catch (error) {
+      console.error('Error adding labels:', error);
+    }
   };
 
   if (loading) {
@@ -173,15 +184,31 @@ function Labels() {
                     <p className="label-date">Created on: {new Date(label.created_at).toLocaleDateString()}</p>
                   </div>
                   <div className="label-actions">
-                    <Link to={`/labels/${label.label}`} className="view-button">
-                      View
-                    </Link>
-                    <button 
-                      className="train-button" 
-                      onClick={() => handleTrainConfirm(label.label)}
-                    >
-                      Train
-                    </button>
+                    {label.trained ? (
+                      <>
+                        <button
+                          className="run-button train-button" 
+                          onClick={() => navigate(`/run/${label.label}`)}
+                        >
+                          Run
+                        </button>
+                        <Link to={`/labels/${label.label}`} className="view-button">
+                          View
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <Link to={`/labels/${label.label}`} className="view-button">
+                          View
+                        </Link>
+                        <button 
+                          className="train-button" 
+                          onClick={() => handleTrainConfirm(label.label)}
+                        >
+                          Train
+                        </button>
+                      </>
+                    )}
                     <button 
                       className="delete-button" 
                       onClick={() => handleDeleteConfirm(label.label)}
