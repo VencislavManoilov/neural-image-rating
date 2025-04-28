@@ -14,6 +14,7 @@ const schemaDefinition = {
     id: { type: 'increments', primary: true },
     userId: { type: 'integer', notNullable: true },
     label: { type: 'string', notNullable: true },
+    trained: { type: 'boolean', defaultTo: false },
     created_at: { type: 'timestamp', defaultTo: knex.fn.now() },
   }
 };
