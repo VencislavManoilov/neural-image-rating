@@ -111,23 +111,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-}
-
-.spinner {
-  width: 50px;
-  height: 50px;
-  border: 5px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  border-top-color: #a17fe0;
-  animation: spin 1s ease-in-out infinite;
-  margin-bottom: 20px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  height: 100dvh;
 }
 
 /* Responsive design */

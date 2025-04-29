@@ -58,3 +58,53 @@ body {
   align-items: center;
   height: 100dvh;
 }
+
+.button {
+  padding: 8px 15px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+}
+
+.button-blue {
+  background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+  color: white;
+  border: none;
+}
+
+.button-purple {
+  background: linear-gradient(135deg, #5d26c1, #a17fe0);
+  color: white;
+  border: none;
+}
+
+.button-red {
+  background: transparent;
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: #a17fe0;
+  animation: spin 1s ease-in-out infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
