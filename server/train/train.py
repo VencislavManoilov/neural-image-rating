@@ -152,8 +152,11 @@ def fetch_labels():
     df['rating'] = pd.to_numeric(df['rating'], errors='coerce')
     
     # Get rating range
-    min_rating = float(df['rating'].min())
-    max_rating = float(df['rating'].max())
+    # min_rating = float(df['rating'].min())
+    # max_rating = float(df['rating'].max())
+
+    min_rating = 1
+    max_rating = 10
     print(f"Rating range: {min_rating:.1f} to {max_rating:.1f}")
     
     # Normalize ratings to [0, 1] range
@@ -443,10 +446,12 @@ def evaluate_model(model, val_loader, min_rating, max_rating):
     plt.title(f"Model Predictions (MSE: {mse:.4f}, MAE: {mae:.4f})", fontsize=14)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+
+    model_dir = os.path.join(OUTPUT_DIR, LABEL_NAME) if LABEL_NAME else OUTPUT_DIR
     
     # Save figure with high quality
-    # plt.savefig('predictions.png', dpi=300)
-    plt.show()
+    plt.savefig(os.path.join(model_dir, 'predictions.png'))
+    # plt.show()
     
     return mse, mae
 
@@ -515,7 +520,7 @@ def evaluate_classification_model(model, val_loader, min_rating, max_rating):
     
     # Save and show figure
     # plt.savefig('predictions.png', dpi=300)
-    plt.show()
+    # plt.show()
     
     return accuracy, mse, mae
 
