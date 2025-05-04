@@ -2,3 +2,4 @@ images/*
 labels.csv
 node_modules
 labels
+.env

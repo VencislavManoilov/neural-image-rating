@@ -4,6 +4,8 @@ const path = require('path');
 const csv = require('csv-parser');
 const { createObjectCsvWriter } = require('csv-writer');
 const cors = require('cors'); // Add CORS package
+const dotenv = require('dotenv');
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
