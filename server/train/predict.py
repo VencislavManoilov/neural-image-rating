@@ -1,13 +1,13 @@
-import torch
-import torch.nn as nn
-import torchvision.transforms as transforms
-import torchvision.models as models
+import torch # type: ignore
+import torch.nn as nn # type: ignore
+import torchvision.transforms as transforms # type: ignore
+import torchvision.models as models # type: ignore
 from PIL import Image
 import argparse
 import os
 import io
 import requests
-import numpy as np
+import numpy as np # type: ignore
 import sys
 import json
 import gc
